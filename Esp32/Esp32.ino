@@ -26,7 +26,7 @@
  *  │ Buzzer              │ 32       │                         │
  *  │ Push Button         │  5       │ INPUT_PULLUP            │
  *  │ Servo 1             │ 33       │ Manual via Web          │
- *  │ Servo 2             │ 25       │ Manual via Web          │
+ *  │ Servo 2             │ 19       │ Manual via Web          │
  *  │ Servo 3             │ 18       │ Manual via Web          │
  *  │ MQ-2 AOUT           │ 26       │ Analog                  │
  *  │ MQ-2 DOUT           │ 27       │ tidak dipakai           │
@@ -53,7 +53,7 @@
 
 // ── WiFi ─────────────────────────────────────────────────────
 #define WIFI_SSID   "Absolute Solver"
-#define WIFI_PASS   "CynIsTheCutestBotEver333"
+#define WIFI_PASS   "CynIsMyRobo18z"
 
 // ── Pin Definitions ──────────────────────────────────────────
 #define PIN_BUZZER      32
@@ -326,7 +326,7 @@ const char DASHBOARD_HTML[] PROGMEM =
 "      </div>\n"
 "    </div>\n"
 "    <div class=\"servo-card\" id=\"sc2\">\n"
-"      <div class=\"servo-header\"><div class=\"servo-name\">Servo 2 — pin 25</div></div>\n"
+"      <div class=\"servo-header\"><div class=\"servo-name\">Servo 2 — pin 19</div></div>\n"
 "      <div class=\"servo-angle\" id=\"sa2\">0 <span>deg</span></div>\n"
 "      <div class=\"servo-vis\">\n"
 "        <svg width=\"80\" height=\"50\" viewBox=\"0 0 80 50\">\n"
