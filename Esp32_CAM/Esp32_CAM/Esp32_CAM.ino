@@ -9,7 +9,7 @@
 
 // ─── KONFIGURASI WIFI ───────────────────────────────────
 #define WIFI_SSID   "Absolute Solver"
-#define WIFI_PASS   "CynIsTheCutestBotEver333"
+#define WIFI_PASS   "CynIsMyRobo18z"
 
 // ─── PIN KAMERA (AI-THINKER) ────────────────────────────
 #define PWDN_GPIO_NUM     32
@@ -69,7 +69,7 @@ void setup() {
   config.xclk_freq_hz = 20000000;
   config.pixel_format = PIXFORMAT_JPEG;
   config.frame_size   = FRAMESIZE_QVGA;  // 320x240
-  config.jpeg_quality = 15;
+  config.jpeg_quality = 12;
   config.fb_count     = 2;
 
   esp_err_t err = esp_camera_init(&config);
