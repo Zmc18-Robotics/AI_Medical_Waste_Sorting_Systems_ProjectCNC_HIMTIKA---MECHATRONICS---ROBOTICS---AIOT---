@@ -2,28 +2,20 @@
 =============================================================
   train_yolo.py  —  Training YOLOv8 untuk Deteksi Limbah Medis
 =============================================================
-  Jalankan SEKALI sebelum main_yolo.py:
+  VERSI BARU: Object Detection (Menggunakan Bounding Box)
+  
+  Jalankan label_manual.py TERLEBIH DAHULU untuk memberi
+  kotak (bounding box) pada gambar di folder Datasheet.
+
+  Jalankan file ini:
       python train_yolo.py
-
-  Install dulu (satu kali):
-      pip install ultralytics opencv-python numpy pillow
-
-  Struktur Datasheet yang diharapkan:
-    Datasheet/
-      Limbah B3/
-        Obat 1/        ← tiap subfolder = 1 kelas
-        Obat 2/
-      Limbah Infeksius/
-        Plester/
-      Limbah Non-Infeksius/
-        Kain kasa/
-        Tisu Antiseptik/
 =============================================================
 """
 
 import os
 import shutil
 import random
+import yaml
 from pathlib import Path
 
 # ─── Path konfigurasi ────────────────────────────────────────────────────────
@@ -37,128 +29,141 @@ EPOCHS      = 50
 IMG_SIZE    = 320
 BATCH_SIZE  = 8
 
-# WAJIB pakai yolov8n-cls.pt (bukan yolov8n.pt) untuk classification
-MODEL_BASE  = "yolov8n-cls.pt"
+# Model Object Detection (bukan -cls.pt)
+MODEL_BASE  = "yolov8n.pt"
 
 IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
 
-# ════════════════════════════════════════════════════════════════════════════════
 def scan_classes(datasheet_dir):
-    """Scan subfolder 2 level -> dict {nama_kelas: [list path gambar]}"""
-    classes = {}
+    """Membaca folder Datasheet dan mencari gambar yang SUDAH memiliki file .txt"""
+    classes_dict = {}
     datasheet_path = Path(datasheet_dir)
 
     if not datasheet_path.exists():
-        raise FileNotFoundError(
-            f"Folder Datasheet tidak ditemukan:\n  {datasheet_dir}\n"
-            "Pastikan path BASE_DIR sudah benar."
-        )
+        raise FileNotFoundError(f"Folder Datasheet tidak ditemukan: {datasheet_dir}")
 
+    # Kumpulkan nama kelas
     for kategori_dir in sorted(datasheet_path.iterdir()):
-        if not kategori_dir.is_dir():
-            continue
+        if not kategori_dir.is_dir(): continue
         for kelas_dir in sorted(kategori_dir.iterdir()):
-            if not kelas_dir.is_dir():
+            if not kelas_dir.is_dir(): continue
+            classes_dict[kelas_dir.name] = str(kelas_dir)
+
+    class_names = sorted(list(classes_dict.keys()))
+    
+    # Kumpulkan file yang siap train
+    valid_images = {name: [] for name in class_names}
+    
+    for class_name in class_names:
+        class_dir = classes_dict[class_name]
+        for img_name in os.listdir(class_dir):
+            if os.path.splitext(img_name)[1].lower() not in IMG_EXTS:
                 continue
-            gambar_list = [
-                str(p) for p in kelas_dir.iterdir()
-                if p.suffix.lower() in IMG_EXTS
-            ]
-            if not gambar_list:
-                print(f"  [!] Kosong (tidak ada gambar): {kelas_dir}")
-                continue
-            classes[kelas_dir.name] = gambar_list
-            print(f"  Kelas '{kelas_dir.name}' ({kategori_dir.name}): {len(gambar_list)} gambar")
+                
+            img_path = os.path.join(class_dir, img_name)
+            txt_path = os.path.splitext(img_path)[0] + ".txt"
+            
+            if os.path.exists(txt_path):
+                valid_images[class_name].append((img_path, txt_path))
 
-    return classes
+    return class_names, valid_images
 
 
-# ════════════════════════════════════════════════════════════════════════════════
-def build_dataset(classes, out_dir):
-    """
-    Buat struktur YOLO classification:
-      out_dir/train/<kelas>/gambar...
-      out_dir/val/<kelas>/gambar...
-    """
+def build_dataset(class_names, valid_images, out_dir):
+    """Membuat struktur dataset Object Detection untuk YOLOv8"""
     if os.path.exists(out_dir):
         shutil.rmtree(out_dir)
 
-    for kelas, gambar_list in classes.items():
-        random.shuffle(gambar_list)
-        split    = max(1, int(len(gambar_list) * TRAIN_RATIO))
-        trn_imgs = gambar_list[:split]
-        val_imgs = gambar_list[split:] or [gambar_list[-1]]
+    # Buat direktori
+    for split in ["train", "val"]:
+        os.makedirs(os.path.join(out_dir, split, "images"), exist_ok=True)
+        os.makedirs(os.path.join(out_dir, split, "labels"), exist_ok=True)
 
-        for img_path in trn_imgs:
-            dst = os.path.join(out_dir, "train", kelas)
-            os.makedirs(dst, exist_ok=True)
-            shutil.copy2(img_path, dst)
+    total_train = 0
+    total_val = 0
 
-        for img_path in val_imgs:
-            dst = os.path.join(out_dir, "val", kelas)
-            os.makedirs(dst, exist_ok=True)
-            shutil.copy2(img_path, dst)
+    for class_name, img_txt_pairs in valid_images.items():
+        if not img_txt_pairs:
+            continue
+            
+        random.shuffle(img_txt_pairs)
+        split = max(1, int(len(img_txt_pairs) * TRAIN_RATIO))
+        trn_pairs = img_txt_pairs[:split]
+        val_pairs = img_txt_pairs[split:] or [img_txt_pairs[-1]]
 
-    print(f"\n[DATASET] Folder dataset dibuat: {out_dir}")
+        for img_path, txt_path in trn_pairs:
+            shutil.copy2(img_path, os.path.join(out_dir, "train", "images"))
+            shutil.copy2(txt_path, os.path.join(out_dir, "train", "labels"))
+            total_train += 1
+
+        for img_path, txt_path in val_pairs:
+            shutil.copy2(img_path, os.path.join(out_dir, "val", "images"))
+            shutil.copy2(txt_path, os.path.join(out_dir, "val", "labels"))
+            total_val += 1
+
+    print(f"\n[DATASET] Dataset Detection dibuat di: {out_dir}")
+    print(f"  Train: {total_train} gambar")
+    print(f"  Val  : {total_val} gambar")
+    
+    # Buat data.yaml
+    yaml_path = os.path.join(out_dir, "data.yaml")
+    data_yaml = {
+        "path": out_dir,
+        "train": "train/images",
+        "val": "val/images",
+        "nc": len(class_names),
+        "names": class_names
+    }
+    with open(yaml_path, "w") as f:
+        yaml.dump(data_yaml, f, sort_keys=False)
+        
+    return yaml_path
 
 
-# ════════════════════════════════════════════════════════════════════════════════
 def main():
     print("=" * 55)
-    print("  TRAINING YOLOv8-cls -- Deteksi Limbah Medis")
+    print("  TRAINING YOLOv8 -- Object Detection")
     print("=" * 55)
 
-    # Cek ultralytics
     try:
         from ultralytics import YOLO
-        print("[OK] ultralytics terinstall.")
     except ImportError:
-        print("\n[ERROR] ultralytics belum terinstall!")
-        print("Jalankan:\n    pip install ultralytics\n")
+        print("[ERROR] ultralytics belum terinstall! Jalankan: pip install ultralytics")
         return
 
-    # Scan kelas
-    print(f"\n[SCAN] Membaca dataset dari:\n  {DATASHEET_DIR}\n")
+    print(f"\n[SCAN] Mencari gambar berlabel di:\n  {DATASHEET_DIR}\n")
     try:
-        classes = scan_classes(DATASHEET_DIR)
+        class_names, valid_images = scan_classes(DATASHEET_DIR)
     except FileNotFoundError as e:
         print(f"\n[ERROR] {e}")
         return
 
-    if not classes:
-        print("\n[ERROR] Tidak ada kelas ditemukan!")
-        print("Pastikan subfolder Datasheet berisi file gambar.")
+    total_labeled = sum(len(pairs) for pairs in valid_images.values())
+    
+    print(f"[INFO] Kelas ditemukan : {class_names}")
+    print(f"[INFO] Gambar berlabel : {total_labeled} gambar")
+    
+    if total_labeled == 0:
+        print("\n[ERROR] TIDAK ADA GAMBAR BERLABEL (.txt)!")
+        print("Silakan jalankan 'python label_manual.py' terlebih dahulu untuk")
+        print("memberi kotak bounding box pada gambar di folder Datasheet.")
         return
 
-    total_imgs = sum(len(v) for v in classes.values())
-    print(f"\n[INFO] Total kelas  : {len(classes)}")
-    print(f"[INFO] Nama kelas   : {list(classes.keys())}")
-    print(f"[INFO] Total gambar : {total_imgs}")
-
-    if total_imgs < 10:
-        print("\n[WARNING] Gambar sangat sedikit -- akurasi mungkin rendah.")
-        print("Disarankan minimal 30 gambar per kelas.")
-
     # Build dataset
-    print("\n[DATASET] Menyiapkan folder dataset...")
-    random.seed(42)
-    build_dataset(classes, YOLO_DATA_DIR)
+    yaml_path = build_dataset(class_names, valid_images, YOLO_DATA_DIR)
 
     # Training
-    # Gunakan yolov8n-cls.pt -> sudah otomatis task=classify
-    # JANGAN tambahkan parameter task= di sini, itu yang menyebabkan error
-    print(f"\n[TRAIN] Memulai training...")
-    print(f"  Model   : {MODEL_BASE}  (classification)")
+    print(f"\n[TRAIN] Memulai training Object Detection...")
+    print(f"  Model   : {MODEL_BASE}")
     print(f"  Epochs  : {EPOCHS}")
     print(f"  ImgSize : {IMG_SIZE}")
-    print(f"  Batch   : {BATCH_SIZE}")
-    print(f"  Output  : {MODEL_OUT_DIR}\n")
+    print(f"  Batch   : {BATCH_SIZE}\n")
 
     model = YOLO(MODEL_BASE)
 
     model.train(
-        data     = YOLO_DATA_DIR,
+        data     = yaml_path,
         epochs   = EPOCHS,
         imgsz    = IMG_SIZE,
         batch    = BATCH_SIZE,
@@ -169,23 +174,16 @@ def main():
         verbose  = True,
     )
 
-    # Cari hasil
     print("\n" + "=" * 55)
     print("  TRAINING SELESAI!")
     print("=" * 55)
-
+    
     best_pt = os.path.join(MODEL_OUT_DIR, "weights", "best.pt")
     if os.path.exists(best_pt):
-        print(f"  Model: {best_pt}")
-        print("\n  Sekarang jalankan: python main_yolo.py")
+        print(f"  Model siap: {best_pt}")
+        print("\n  Sekarang Anda bisa menjalankan: python main_yolo.py")
     else:
-        print("  Mencari best.pt...")
-        for root, dirs, files in os.walk(BASE_DIR):
-            for f in files:
-                if f == "best.pt":
-                    found = os.path.join(root, f)
-                    print(f"  Ditemukan: {found}")
-                    print("  Update MODEL_PATH di main_yolo.py sesuai path ini.")
+        print("  Selesai, silakan cek folder waste_model/weights/")
     print("=" * 55)
 
 
