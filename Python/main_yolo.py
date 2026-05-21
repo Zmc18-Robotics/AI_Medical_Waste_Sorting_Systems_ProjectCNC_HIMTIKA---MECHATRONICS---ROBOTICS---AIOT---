@@ -151,19 +151,15 @@ def save_screenshot(frame, label="manual"):
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-#  Inferensi YOLO classification (BERBEDA dari detection!)
-#
-#  Model classification (yolov8n-cls) tidak menghasilkan bounding box.
-#  Dia mengklasifikasikan SELURUH frame -> 1 prediksi teratas per frame.
-#  Output: result.probs  (bukan result.boxes)
+#  Inferensi YOLO (Mendukung Detection & Classification)
 # ════════════════════════════════════════════════════════════════════════════════
-def run_yolo_cls(model, frame):
+def run_yolo_inference(model, frame):
     """
-    Jalankan classification pada frame.
     Return:
-      detected_name : str  nama kelas terdeteksi, atau None jika di bawah threshold
-      confidence    : float
-      frame         : frame dengan overlay info
+      detections: list of dict {"name": str, "conf": float, "box": (x1,y1,x2,y2)} 
+                  (kosong jika classification atau tidak ada deteksi)
+      cls_name: str (nama kelas jika classification, None jika detection)
+      cls_conf: float
     """
     results = model.predict(
         source  = frame,
@@ -172,27 +168,39 @@ def run_yolo_cls(model, frame):
     )
 
     if not results:
-        return None, 0.0, frame
+        return [], None, 0.0
 
     result = results[0]
+    
+    detections = []
+    cls_name = None
+    cls_conf = 0.0
 
-    # result.probs adalah Probs object
-    # .top1       -> index kelas dengan prob tertinggi
-    # .top1conf   -> confidence-nya (tensor)
-    # model.names -> dict {index: nama_kelas}
-    probs = result.probs
-    if probs is None:
-        return None, 0.0, frame
+    # Cek jika model adalah Object Detection (punya atribut boxes yang tidak None)
+    if result.boxes is not None:
+        for box in result.boxes:
+            conf = float(box.conf[0])
+            if conf < CONF_THRESHOLD:
+                continue
+            cls_idx = int(box.cls[0])
+            name = model.names[cls_idx]
+            x1, y1, x2, y2 = map(int, box.xyxy[0])
+            detections.append({
+                "name": name,
+                "conf": conf,
+                "box": (x1, y1, x2, y2)
+            })
+            
+    # Cek jika model adalah Classification (punya atribut probs yang tidak None)
+    elif result.probs is not None:
+        probs = result.probs
+        top1_idx = int(probs.top1)
+        top1_conf = float(probs.top1conf)
+        if top1_conf >= CONF_THRESHOLD:
+            cls_name = model.names[top1_idx]
+            cls_conf = top1_conf
 
-    top1_idx  = int(probs.top1)
-    top1_conf = float(probs.top1conf)
-    top1_name = model.names[top1_idx]
-
-    # Hanya tampilkan jika confidence melewati threshold
-    if top1_conf < CONF_THRESHOLD:
-        return None, top1_conf, frame
-
-    return top1_name, top1_conf, frame
+    return detections, cls_name, cls_conf
 
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -245,6 +253,53 @@ def draw_classification_overlay(frame, name, conf):
 
     return frame
 
+
+def draw_yolo_overlay(frame, detections, cls_name, cls_conf):
+    h, w = frame.shape[:2]
+
+    # Jika ada deteksi objek (Object Detection)
+    if detections:
+        for det in detections:
+            name = det["name"]
+            conf = det["conf"]
+            x1, y1, x2, y2 = det["box"]
+
+            info = WASTE_INFO.get(name, {
+                "kategori": "Tidak Dikenal",
+                "warna": (128, 128, 128),
+                "aksi": "-"
+            })
+            color = info["warna"]
+
+            # Gambar Bounding Box
+            cv2.rectangle(frame, (x1, y1), (x2, y2), color, 3)
+            
+            # Label
+            label1 = f"{name} {conf:.0%}"
+            label2 = f"{info['kategori']} | {info['aksi']}"
+            
+            (lw1, lh1), _ = cv2.getTextSize(label1, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            (lw2, lh2), _ = cv2.getTextSize(label2, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)
+            lw = max(lw1, lw2)
+            
+            # Background untuk teks
+            # Pastikan teks tidak keluar batas atas frame
+            y_bg = max(y1, 40)
+            cv2.rectangle(frame, (x1, y_bg - 40), (x1 + lw + 10, y_bg), color, -1)
+            
+            # Teks Putih
+            cv2.putText(frame, label1, (x1 + 5, y_bg - 22), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+            cv2.putText(frame, label2, (x1 + 5, y_bg - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            
+        return frame
+        
+    # Jika mode klasifikasi
+    elif cls_name is not None:
+        return draw_classification_overlay(frame, cls_name, cls_conf)
+        
+    # Jika tidak ada objek (baik classification maupun detection kosong)
+    else:
+        return draw_classification_overlay(frame, None, 0.0)
 
 # ════════════════════════════════════════════════════════════════════════════════
 #  Main loop
@@ -306,8 +361,9 @@ def main():
             # Throttle YOLO: jalankan max tiap 0.15 detik
             last_yolo_time  = 0
             YOLO_INTERVAL   = 0.15
-            last_name       = None   # hasil YOLO terakhir (ditampilkan antar interval)
-            last_conf       = 0.0
+            last_cls_name   = None   # hasil YOLO classification
+            last_cls_conf   = 0.0
+            last_detections = []     # hasil YOLO detection
 
             while recv_t.is_alive():
                 if not frame_queue:
@@ -341,15 +397,15 @@ def main():
                         send_sf({"cmd": "servo", "id": 1, "angle": 0})
                         face_active = False
 
-                # ── YOLO classification (di-throttle) ────────────────
+                # ── YOLO inference (di-throttle) ─────────────────────
                 now = time.time()
                 if yolo_model and (now - last_yolo_time) >= YOLO_INTERVAL:
-                    last_name, last_conf, frame = run_yolo_cls(yolo_model, frame)
+                    last_detections, last_cls_name, last_cls_conf = run_yolo_inference(yolo_model, frame)
                     last_yolo_time = now
 
-                # ── Gambar overlay klasifikasi ────────────────────────
+                # ── Gambar overlay ───────────────────────────────────
                 if yolo_model:
-                    frame = draw_classification_overlay(frame, last_name, last_conf)
+                    frame = draw_yolo_overlay(frame, last_detections, last_cls_name, last_cls_conf)
 
                 # ── Status wajah (pojok kiri atas) ───────────────────
                 cv2.putText(
@@ -367,7 +423,12 @@ def main():
 
                 # ── Auto-capture ──────────────────────────────────────
                 if auto_capture:
-                    label_cap = last_name.replace(" ", "_") if last_name else "unknown"
+                    if last_detections:
+                        label_cap = last_detections[0]["name"].replace(" ", "_")
+                    elif last_cls_name:
+                        label_cap = last_cls_name.replace(" ", "_")
+                    else:
+                        label_cap = "unknown"
                     save_screenshot(frame, label=label_cap)
                     cv2.putText(
                         frame, "AUTO-CAPTURE ON", (10, 60),
