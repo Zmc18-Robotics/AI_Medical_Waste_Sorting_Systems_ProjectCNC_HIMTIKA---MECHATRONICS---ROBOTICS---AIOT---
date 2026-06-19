@@ -87,6 +87,13 @@ void setup() {
   Serial.println("Senter ON");
 
   // Koneksi WiFi
+  // ── IP Statis agar Python selalu connect ke alamat ini ──
+  // IP Statis dinonaktifkan — biar dapat IP otomatis dari router/hotspot HP
+  // IPAddress staticIP(192, 168, 4, 2);
+  // IPAddress gateway(192, 168, 4, 1);
+  // IPAddress subnet(255, 255, 255, 0);
+  // WiFi.config(staticIP, gateway, subnet);
+
   WiFi.setAutoReconnect(true);
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) {
