@@ -379,6 +379,9 @@ def main():
 
             send_flash(True)
             print("[CAM] Senter ON.")
+            
+            # Start motor continuously at startup
+            send_sf({"cmd": "machine", "on": True})
 
             recv_t = threading.Thread(target=receiver_thread, args=(cam_sock,), daemon=True)
             recv_t.start()
@@ -420,14 +423,14 @@ def main():
                     face_txt = "WAJAH TERDETEKSI"
                     face_col = (0, 220, 220)
                     if not face_active:
-                        send_sf({"cmd": "machine", "on": True})
+                        # send_sf({"cmd": "machine", "on": True}) # Dihapus agar motor berjalan terus
                         # send_sf({"cmd": "servo", "id": 1, "angle": 90}) # Dihapus agar tidak konflik dengan servo pemilah
                         face_active = True
                 else:
                     face_txt = "TIDAK ADA WAJAH"
                     face_col = (0, 0, 200)
                     if face_active:
-                        send_sf({"cmd": "machine", "on": False})
+                        # send_sf({"cmd": "machine", "on": False}) # Dihapus agar motor berjalan terus
                         # send_sf({"cmd": "servo", "id": 1, "angle": 0})
                         face_active = False
 
