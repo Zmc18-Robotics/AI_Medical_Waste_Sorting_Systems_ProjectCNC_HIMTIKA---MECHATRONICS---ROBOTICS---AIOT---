@@ -80,6 +80,9 @@
 #define PIN_MOTOR_ENA   16
 #define PWM_MOTOR_FREQ  1000
 #define PWM_MOTOR_RES      8
+#define MOTOR_SPEED_KICK  204   // 80% speed for kickstart
+#define MOTOR_SPEED_RUN   179   // 70% speed for normal run
+#define MOTOR_KICK_MS     400   // duration of kickstart in ms
 
 // ── MQ-2 ─────────────────────────────────────────────────────
 #define MQ2_THRESHOLD_DELTA  150
@@ -1107,7 +1110,7 @@ int    lastActiveServo = 0;  // 0 = tidak ada, 1/2/3 = servo aktif
 
 // Motor
 String   motorState = "stop";   // "fwd" | "bwd" | "stop"
-int      motorSpeed = 200;      // 0–255
+int      motorSpeed = 153;      // 0–255  (60% default — kecepatan konveyor)
 
 // Push Button
 bool     btnPressed   = false;
@@ -1155,12 +1158,31 @@ bool lastFlameD0  = false;
 uint32_t lastWsBroadcast = 0;
 
 // Testing Flags
-uint32_t testGasUntil   = 0;
-uint32_t testWaterUntil = 0;
-uint32_t testFlameUntil = 0;
-uint32_t testBuzzerUntil= 0;
-uint32_t testMotorUntil = 0;
-int      testMotorStep  = 0;
+uint32_t testGasUntil    = 0;
+uint32_t testWaterUntil  = 0;
+uint32_t testFlameUntil  = 0;
+uint32_t testBuzzerUntil = 0;
+uint32_t testMotorUntil  = 0;
+int      testMotorStep   = 0;
+
+// ── Servo Delay (sesuai jarak titik jatuh di konveyor) ───────
+#define SERVO_DELAY_1  1700   // ms — Infeksius
+#define SERVO_DELAY_2  1950   // ms — Non-Infeksius
+#define SERVO_DELAY_3  2200   // ms — B3
+
+struct ServoJob {
+  bool     pending;
+  uint32_t openAt;
+  int      angle;
+  String   waste;
+  String   cat;
+};
+ServoJob servoJobs[4];  // index 1–3 dipakai, 0 diabaikan
+
+// Auto-resume konveyor setelah test sensor selesai
+uint32_t autoResumeMotorAt = 0;
+// Kick-start ramp-down timer (80% → 60%)
+uint32_t motorKickUntil    = 0;
 
 // ─────────────────────────────────────────────────────────────
 //  FORWARD DECLARATIONS
@@ -1176,6 +1198,7 @@ void setRGBOff();
 void setRGBSolid(RGBColor c);
 void setMotor(String dir, int spd);
 void stopMotor();
+void startConveyor();
 void updateLCD();
 void stopBuzzer();
 void broadcastStatus();
@@ -1282,35 +1305,37 @@ void setup() {
       String cmd = server.arg("cmd");
       
       if (cmd == "servo") {
-        int id = server.arg("id").toInt();
+        int id    = server.arg("id").toInt();
         int angle = server.arg("angle").toInt();
-        if (id == 1) { servo1.write(angle); servoAngle1 = angle; }
-        else if (id == 2) { servo2.write(angle); servoAngle2 = angle; }
-        else if (id == 3) { servo3.write(angle); servoAngle3 = angle; }
-        
-        if (server.hasArg("waste")) {
-          lastWasteName = server.arg("waste");
+        String w  = server.hasArg("waste") ? server.arg("waste") : lastWasteName;
+        String c  = server.hasArg("cat")   ? server.arg("cat")   : lastWasteCategory;
+
+        if (id >= 1 && id <= 3) {
+          // Hitung delay konveyor hanya saat MEMBUKA servo (angle > 0)
+          uint32_t delayMs = 0;
+          if (angle > 0) {
+            if      (id == 1) delayMs = SERVO_DELAY_1;  // Infeksius     = 2.0 s
+            else if (id == 2) delayMs = SERVO_DELAY_2;  // Non-Infeksius = 2.3 s
+            else if (id == 3) delayMs = SERVO_DELAY_3;  // B3            = 2.6 s
+          }
+
+          servoJobs[id].pending = true;
+          servoJobs[id].openAt  = millis() + delayMs;
+          servoJobs[id].angle   = angle;
+          servoJobs[id].waste   = w;
+          servoJobs[id].cat     = c;
+
+          Serial.printf("[HTTP] Servo %d -> %d deg dijadwalkan dalam %dms (Objek: %s)\n",
+                        id, angle, delayMs, w.c_str());
         }
-        if (server.hasArg("cat")) {
-          lastWasteCategory = server.arg("cat");
-        }
-        
-        // Catat servo mana yang aktif (angle > 0 = terbuka, 0 = tertutup)
-        if (angle > 0) {
-          lastActiveServo = id;
-        } else if (id == lastActiveServo) {
-          lastActiveServo = 0;
-        }
-        
-        Serial.printf("[HTTP] Servo %d -> %d deg, Objek: %s\n", id, angle, lastWasteName.c_str());
         server.send(200, "text/plain", "OK");
-        broadcastStatus();  // Langsung update ke dashboard web
+        broadcastStatus();
       }
       else if (cmd == "machine") {
         String onStr = server.arg("on");
         if (onStr.equalsIgnoreCase("true")) {
-          setMotor("fwd", motorSpeed);
-          Serial.println("[HTTP] Mesin ON");
+          startConveyor();
+          Serial.println("[HTTP] Mesin ON (kick-start 80%->60%)");
         } else {
           stopMotor();
           Serial.println("[HTTP] Mesin OFF");
@@ -1366,9 +1391,50 @@ void loop() {
     if (testMotorStep == 1) {
       if (now >= testMotorUntil) { stopMotor(); testMotorStep = 2; testMotorUntil = now + 1000; }
     } else if (testMotorStep == 2) {
-      if (now >= testMotorUntil) { setMotor("bwd", 150); testMotorStep = 3; testMotorUntil = now + 2000; }
+      if (now >= testMotorUntil) { setMotor("bwd", MOTOR_SPEED_KICK); testMotorStep = 3; testMotorUntil = now + 2000; }
     } else if (testMotorStep == 3) {
       if (now >= testMotorUntil) { stopMotor(); testMotorStep = 0; testMotorUntil = 0; }
+    }
+  }
+
+  // --- MOTOR KICK-START RAMP-DOWN (80% -> 60%) ---
+  if (motorKickUntil > 0 && now >= motorKickUntil && motorState == "fwd") {
+    motorKickUntil = 0;
+    motorSpeed = MOTOR_SPEED_RUN;
+    ledcWrite(PIN_MOTOR_ENA, motorSpeed);
+    Serial.println("[MOTOR] Ramp-down ke 60%");
+    broadcastStatus();
+  }
+
+  // --- SERVO SCHEDULED JOBS (delay konveyor) ---
+  for (int i = 1; i <= 3; i++) {
+    if (servoJobs[i].pending && now >= servoJobs[i].openAt) {
+      servoJobs[i].pending = false;
+      int a = servoJobs[i].angle;
+      if      (i == 1) { servo1.write(a); servoAngle1 = a; }
+      else if (i == 2) { servo2.write(a); servoAngle2 = a; }
+      else if (i == 3) { servo3.write(a); servoAngle3 = a; }
+      if (a > 0) {
+        lastWasteName     = servoJobs[i].waste;
+        lastWasteCategory = servoJobs[i].cat;
+        lastActiveServo   = i;
+        Serial.printf("[SERVO] Servo %d dibuka (%s)\n", i, lastWasteName.c_str());
+      } else {
+        if (i == lastActiveServo) { lastActiveServo = 0; }
+        lastWasteName     = "Tidak Ada";
+        lastWasteCategory = "-";
+        Serial.printf("[SERVO] Servo %d ditutup\n", i);
+      }
+      broadcastStatus();
+    }
+  }
+
+  // --- AUTO-RESUME KONVEYOR SETELAH TEST SENSOR ---
+  if (autoResumeMotorAt > 0 && now >= autoResumeMotorAt) {
+    autoResumeMotorAt = 0;
+    if (!gasAlert && !waterAlert && !flameAlert) {
+      startConveyor();
+      Serial.println("[TEST] Konveyor dilanjutkan otomatis setelah test selesai.");
     }
   }
 
@@ -1522,19 +1588,32 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   if (strcmp(cmd, "test") == 0) {
     const char* target = doc["target"] | "";
     if (strcmp(target, "buzzer") == 0) {
+      // Test buzzer: hanya beep, konveyor tidak berhenti
       testBuzzerUntil = millis() + 1000;
       tone(PIN_BUZZER, 2000);
     } else if (strcmp(target, "gas") == 0) {
-      testGasUntil = millis() + 4000;
+      // Test gas: hentikan konveyor + beep, lanjutkan 5.5 detik kemudian
+      stopMotor();
+      tone(PIN_BUZZER, 2000);
+      testGasUntil      = millis() + 4000;
+      autoResumeMotorAt = millis() + 5500;
     } else if (strcmp(target, "water") == 0) {
-      testWaterUntil = millis() + 4000;
+      stopMotor();
+      tone(PIN_BUZZER, 2000);
+      testWaterUntil    = millis() + 4000;
+      autoResumeMotorAt = millis() + 5500;
     } else if (strcmp(target, "flame") == 0) {
-      testFlameUntil = millis() + 4000;
+      stopMotor();
+      tone(PIN_BUZZER, 2000);
+      testFlameUntil    = millis() + 4000;
+      autoResumeMotorAt = millis() + 5500;
     } else if (strcmp(target, "motor") == 0) {
-      setMotor("fwd", 150);
-      testMotorStep = 1;
+      // Test motor: urutan maju 2s → stop 1s → mundur 2s → stop
+      setMotor("fwd", motorSpeed);
+      testMotorStep  = 1;
       testMotorUntil = millis() + 2000;
     }
+    broadcastStatus();
     return;
   }
 }
@@ -1622,6 +1701,7 @@ void handleGasSensor(uint32_t now) {
     gasAlert = false;
     if (!waterAlert && !flameAlert) {
       stopBuzzer(); setRGBOff();
+      startConveyor();  // Konveyor kembali jalan (kick-start 80%->60%)
       lcd.clear(); lcd.setCursor(0, 0); lcd.print("Udara bersih.");
       lcdClearPending = true; lcdClearTimer = now;
     }
@@ -1653,6 +1733,7 @@ void handleWaterSensor(uint32_t now) {
     waterAlert = false;
     if (!gasAlert && !flameAlert) {
       stopBuzzer(); setRGBOff();
+      startConveyor();  // Konveyor kembali jalan (kick-start 80%->60%)
       lcd.clear(); lcd.setCursor(0, 0); lcd.print("Air aman.");
       lcdClearPending = true; lcdClearTimer = now;
     }
@@ -1686,6 +1767,7 @@ void handleFlameSensor(uint32_t now) {
     flameAlert = false;
     if (!gasAlert && !waterAlert) {
       stopBuzzer(); setRGBOff();
+      startConveyor();  // Konveyor kembali jalan (kick-start 80%->60%)
       lcd.clear(); lcd.setCursor(0, 0); lcd.print("Api padam.");
       lcdClearPending = true; lcdClearTimer = now;
     }
@@ -1698,6 +1780,16 @@ void handleFlameSensor(uint32_t now) {
 void stopBuzzer() {
   noTone(PIN_BUZZER);
   digitalWrite(PIN_BUZZER, LOW);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  START CONVEYOR (Kick-start 80% → 60%)
+// ─────────────────────────────────────────────────────────────
+void startConveyor() {
+  // Jalankan di 80% dulu agar konveyor bisa bergerak (tidak macet)
+  setMotor("fwd", MOTOR_SPEED_KICK);
+  motorKickUntil = millis() + MOTOR_KICK_MS;  // Setelah 400ms turun ke 60%
+  Serial.println("[MOTOR] Kick-start 80% -> 60%");
 }
 
 // ─────────────────────────────────────────────────────────────
