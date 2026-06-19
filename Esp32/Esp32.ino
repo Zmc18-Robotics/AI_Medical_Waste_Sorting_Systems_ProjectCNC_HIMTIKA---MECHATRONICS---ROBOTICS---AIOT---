@@ -685,6 +685,17 @@ const char DASHBOARD_HTML[] PROGMEM = R"====(
       </div>
     </div>
 
+    <!-- HARDWARE DIAGNOSTICS -->
+    <div class="section-label">Hardware Diagnostics (Test Mode)</div>
+    <div class="grid-3" style="margin-bottom: 20px;">
+      <div class="motor-btn" style="border-color:var(--purple);color:var(--purple);" onclick="testHardware('yolo')">🎯 Simulasi Deteksi YOLO</div>
+      <div class="motor-btn" style="border-color:var(--warn);color:var(--warn);" onclick="testHardware('buzzer')">🔊 Test Buzzer (1s)</div>
+      <div class="motor-btn" style="border-color:var(--accent);color:var(--accent);" onclick="testHardware('motor')">⚙ Test Motor (Auto)</div>
+      <div class="motor-btn" style="border-color:var(--muted);color:var(--muted);" onclick="testHardware('gas')">💨 Test Gas</div>
+      <div class="motor-btn" style="border-color:var(--ok);color:var(--ok);" onclick="testHardware('water')">💧 Test Air</div>
+      <div class="motor-btn" style="border-color:var(--danger);color:var(--danger);" onclick="testHardware('flame')">🔥 Test Api</div>
+    </div>
+
   </div><!-- /adminView -->
 
 </main>
@@ -1028,6 +1039,28 @@ function servoPreset(id, angle) {
 }
 
 // ═══════════════════════════════════════
+//  TESTING
+// ═══════════════════════════════════════
+function testHardware(type) {
+  if (type === 'yolo') {
+    const items = [
+      {id:1, w:'Plester (Test)', c:'Limbah Infeksius'},
+      {id:2, w:'Kain Kasa (Test)', c:'Limbah Non-Infeksius'},
+      {id:3, w:'Obat B3 (Test)', c:'Limbah B3'}
+    ];
+    const sel = items[Math.floor(Math.random() * items.length)];
+    fetch(`http://${esp32Host}/api?cmd=servo&id=${sel.id}&angle=90&waste=${encodeURIComponent(sel.w)}&cat=${encodeURIComponent(sel.c)}`);
+    showToast('Simulasi deteksi YOLO dikirim!');
+    setTimeout(() => {
+       fetch(`http://${esp32Host}/api?cmd=servo&id=${sel.id}&angle=0&waste=Tidak%20Ada&cat=-`);
+    }, 3000);
+  } else {
+    send({ cmd: 'test', target: type });
+    showToast('Menjalankan Test: ' + type.toUpperCase());
+  }
+}
+
+// ═══════════════════════════════════════
 //  MQ-2 WARMUP ANIMATION
 // ═══════════════════════════════════════
 function startWarmupAnim() {
@@ -1121,6 +1154,14 @@ bool lastFlameD0  = false;
 
 uint32_t lastWsBroadcast = 0;
 
+// Testing Flags
+uint32_t testGasUntil   = 0;
+uint32_t testWaterUntil = 0;
+uint32_t testFlameUntil = 0;
+uint32_t testBuzzerUntil= 0;
+uint32_t testMotorUntil = 0;
+int      testMotorStep  = 0;
+
 // ─────────────────────────────────────────────────────────────
 //  FORWARD DECLARATIONS
 // ─────────────────────────────────────────────────────────────
@@ -1169,6 +1210,7 @@ void setup() {
   setRGBOff();
 
   analogReadResolution(12);
+  noTone(PIN_BUZZER);
   digitalWrite(PIN_BUZZER, LOW);
 
   // ========== SERVO SETUP ==========
@@ -1316,6 +1358,20 @@ void loop() {
   handleFlameSensor(now);
   handleButton(now);
 
+  // --- HARDWARE TEST HANDLER ---
+  if (testBuzzerUntil > 0) {
+    if (now >= testBuzzerUntil) { noTone(PIN_BUZZER); digitalWrite(PIN_BUZZER, LOW); testBuzzerUntil = 0; }
+  }
+  if (testMotorUntil > 0) {
+    if (testMotorStep == 1) {
+      if (now >= testMotorUntil) { stopMotor(); testMotorStep = 2; testMotorUntil = now + 1000; }
+    } else if (testMotorStep == 2) {
+      if (now >= testMotorUntil) { setMotor("bwd", 150); testMotorStep = 3; testMotorUntil = now + 2000; }
+    } else if (testMotorStep == 3) {
+      if (now >= testMotorUntil) { stopMotor(); testMotorStep = 0; testMotorUntil = 0; }
+    }
+  }
+
   if (lcdClearPending && (now - lcdClearTimer >= LCD_CLEAR_DELAY)) {
     lcdClearPending = false;
     updateLCD();
@@ -1461,6 +1517,26 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     broadcastStatus();
     return;
   }
+
+  // ── Test command ──
+  if (strcmp(cmd, "test") == 0) {
+    const char* target = doc["target"] | "";
+    if (strcmp(target, "buzzer") == 0) {
+      testBuzzerUntil = millis() + 1000;
+      tone(PIN_BUZZER, 2000);
+    } else if (strcmp(target, "gas") == 0) {
+      testGasUntil = millis() + 4000;
+    } else if (strcmp(target, "water") == 0) {
+      testWaterUntil = millis() + 4000;
+    } else if (strcmp(target, "flame") == 0) {
+      testFlameUntil = millis() + 4000;
+    } else if (strcmp(target, "motor") == 0) {
+      setMotor("fwd", 150);
+      testMotorStep = 1;
+      testMotorUntil = millis() + 2000;
+    }
+    return;
+  }
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -1528,12 +1604,17 @@ void handleGasSensor(uint32_t now) {
 
   if (now - mq2LastRead < MQ2_READ_INTERVAL) return;
   mq2LastRead = now;
-  lastGasVal = analogRead(PIN_GAS_AOUT);
+
+  if (testGasUntil > 0 && now < testGasUntil) {
+    lastGasVal = 4095; // Simulasi deteksi gas maksimal
+  } else {
+    lastGasVal = analogRead(PIN_GAS_AOUT);
+  }
 
   if (!gasAlert && lastGasVal > mq2ThreshOn) {
     gasAlert = true;
     stopMotor();
-    digitalWrite(PIN_BUZZER, HIGH);
+    tone(PIN_BUZZER, 2000);
     setRGBBlink(COL_GAS_A, COL_GAS_B);
     lcd.clear(); lcd.setCursor(0, 0); lcd.print("!! BAHAYA ASAP!!");
     lcd.setCursor(0, 1); lcd.print("ADC:"); lcd.print(lastGasVal);
@@ -1554,12 +1635,17 @@ void handleWaterSensor(uint32_t now) {
   if (!mq2WarmupDone) return;
   if (now - waterLastRead < WATER_READ_INTERVAL) return;
   waterLastRead = now;
-  lastWaterVal = analogRead(PIN_WATER_AOUT);
+
+  if (testWaterUntil > 0 && now < testWaterUntil) {
+    lastWaterVal = 4095; // Simulasi air penuh
+  } else {
+    lastWaterVal = analogRead(PIN_WATER_AOUT);
+  }
 
   if (!waterAlert && lastWaterVal > WATER_THRESHOLD_ON) {
     waterAlert = true;
     stopMotor();
-    digitalWrite(PIN_BUZZER, HIGH);
+    tone(PIN_BUZZER, 2000);
     setRGBBlink(COL_WATER_A, COL_WATER_B);
     lcd.clear(); lcd.setCursor(0, 0); lcd.print("!! BANJIR/AIR !!");
     lcd.setCursor(0, 1); lcd.print("ADC:"); lcd.print(lastWaterVal);
@@ -1580,13 +1666,19 @@ void handleFlameSensor(uint32_t now) {
   if (!mq2WarmupDone) return;
   if (now - flameLastRead < FLAME_READ_INTERVAL) return;
   flameLastRead = now;
-  lastFlameD0  = (digitalRead(PIN_FLAME_DOUT) == HIGH);
-  lastFlameADC = analogRead(PIN_FLAME_AOUT);
+
+  if (testFlameUntil > 0 && now < testFlameUntil) {
+    lastFlameD0 = true;
+    lastFlameADC = 4095;
+  } else {
+    lastFlameD0  = (digitalRead(PIN_FLAME_DOUT) == HIGH);
+    lastFlameADC = analogRead(PIN_FLAME_AOUT);
+  }
 
   if (!flameAlert && lastFlameD0) {
     flameAlert = true;
     stopMotor();
-    digitalWrite(PIN_BUZZER, HIGH);
+    tone(PIN_BUZZER, 2000);
     setRGBBlink(COL_FLAME_A, COL_FLAME_B);
     lcd.clear(); lcd.setCursor(0, 0); lcd.print("!! BAHAYA API !!");
     lcd.setCursor(0, 1); lcd.print("ADC:"); lcd.print(lastFlameADC);
@@ -1604,6 +1696,7 @@ void handleFlameSensor(uint32_t now) {
 //  BUZZER
 // ─────────────────────────────────────────────────────────────
 void stopBuzzer() {
+  noTone(PIN_BUZZER);
   digitalWrite(PIN_BUZZER, LOW);
 }
 
