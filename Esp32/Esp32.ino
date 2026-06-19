@@ -114,454 +114,939 @@
 // ─────────────────────────────────────────────────────────────
 //  DASHBOARD HTML
 // ─────────────────────────────────────────────────────────────
-const char DASHBOARD_HTML[] PROGMEM =
-"<!DOCTYPE html>\n"
-"<html lang=\"id\">\n"
-"<head>\n"
-"<meta charset=\"UTF-8\">\n"
-"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n"
-"<title>Smart Factory — Control</title>\n"
-"<style>\n"
-"  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;600&display=swap');\n"
-"  :root {\n"
-"    --bg:#0d0f14;--surface:#161a23;--surface2:#1e2330;\n"
-"    --border:#2a3045;--accent:#00e5ff;--accent2:#ff6b35;\n"
-"    --text:#e8ecf0;--muted:#6b7a8d;--danger:#ff3b3b;\n"
-"    --warn:#ffb020;--ok:#22d55a;\n"
-"    --font-mono:'Space Mono',monospace;\n"
-"    --font-sans:'IBM Plex Sans',sans-serif;\n"
-"    --radius:8px;\n"
-"  }\n"
-"  *{box-sizing:border-box;margin:0;padding:0;}\n"
-"  body{background:var(--bg);color:var(--text);font-family:var(--font-sans);min-height:100vh;}\n"
-"  header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;\n"
-"    display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}\n"
-"  .logo{font-family:var(--font-mono);font-size:13px;letter-spacing:0.12em;color:var(--accent);text-transform:uppercase;}\n"
-"  .logo span{color:var(--muted);}\n"
-"  .conn-badge{font-family:var(--font-mono);font-size:11px;padding:4px 12px;border-radius:20px;\n"
-"    border:1px solid;letter-spacing:0.08em;text-transform:uppercase;transition:all 0.3s;}\n"
-"  .conn-badge.disconnected{border-color:var(--danger);color:var(--danger);}\n"
-"  .conn-badge.connected{border-color:var(--ok);color:var(--ok);}\n"
-"  .conn-badge.connecting{border-color:var(--warn);color:var(--warn);}\n"
-"  main{max-width:900px;margin:0 auto;padding:24px 20px;}\n"
-"  .alert-banner{display:none;align-items:center;gap:10px;\n"
-"    background:rgba(255,59,59,0.12);border:1px solid var(--danger);border-radius:var(--radius);\n"
-"    padding:12px 16px;margin-bottom:16px;font-size:13px;color:var(--danger);\n"
-"    animation:pulse-border 1s infinite;}\n"
-"  .alert-banner.active{display:flex;}\n"
-"  @keyframes pulse-border{0%,100%{border-color:var(--danger)}50%{border-color:transparent}}\n"
-"  .alert-dot{width:8px;height:8px;border-radius:50%;background:var(--danger);animation:blink 0.6s infinite;flex-shrink:0;}\n"
-"  @keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}\n"
-"  .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:16px;}\n"
-"  .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:16px;}\n"
-"  @media(max-width:640px){.grid-2{grid-template-columns:1fr}.grid-3{grid-template-columns:1fr}}\n"
-"  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;}\n"
-"  .card-title{font-family:var(--font-mono);font-size:10px;letter-spacing:0.15em;color:var(--muted);\n"
-"    text-transform:uppercase;margin-bottom:14px;}\n"
-"  .servo-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);\n"
-"    padding:18px;transition:border-color 0.2s;}\n"
-"  .servo-card.active{border-color:var(--accent);}\n"
-"  .servo-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}\n"
-"  .servo-name{font-family:var(--font-mono);font-size:11px;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;}\n"
-"  .servo-angle{font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--accent);letter-spacing:-0.02em;}\n"
-"  .servo-angle span{font-size:14px;color:var(--muted);}\n"
-"  .servo-vis{display:flex;justify-content:center;margin:10px 0 14px;}\n"
-"  input[type=range]{-webkit-appearance:none;width:100%;height:4px;background:var(--border);border-radius:2px;outline:none;cursor:pointer;}\n"
-"  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;\n"
-"    background:var(--accent);border:2px solid var(--bg);transition:transform 0.1s;}\n"
-"  input[type=range]::-webkit-slider-thumb:active{transform:scale(1.2);}\n"
-"  .servo-presets{display:flex;gap:6px;margin-top:12px;}\n"
-"  .preset-btn{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);\n"
-"    color:var(--muted);font-family:var(--font-mono);font-size:11px;padding:7px 4px;cursor:pointer;text-align:center;transition:all 0.15s;}\n"
-"  .preset-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.05);}\n"
-"  .preset-btn.active-preset{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.1);}\n"
-"  .sensor-value{font-family:var(--font-mono);font-size:22px;font-weight:700;margin-bottom:4px;}\n"
-"  .sensor-label{font-size:12px;color:var(--muted);margin-bottom:10px;}\n"
-"  .sensor-bar-wrap{background:var(--bg);border-radius:3px;height:4px;overflow:hidden;margin-top:8px;}\n"
-"  .sensor-bar{height:100%;border-radius:3px;transition:width 0.4s;background:var(--ok);}\n"
-"  .sensor-bar.warn{background:var(--warn);}\n"
-"  .sensor-bar.alert{background:var(--danger);}\n"
-"  .status-pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--font-mono);font-size:10px;\n"
-"    letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;border-radius:20px;border:1px solid;}\n"
-"  .status-pill.ok{border-color:var(--ok);color:var(--ok);}\n"
-"  .status-pill.danger{border-color:var(--danger);color:var(--danger);background:rgba(255,59,59,0.08);}\n"
-"  .status-pill.offline{border-color:var(--muted);color:var(--muted);}\n"
-"  .warmup-bar{background:var(--bg);border-radius:3px;height:6px;overflow:hidden;margin-top:10px;}\n"
-"  .warmup-fill{height:100%;background:var(--warn);border-radius:3px;transition:width 1s linear;}\n"
-"  .section-label{font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;color:var(--muted);\n"
-"    text-transform:uppercase;margin:20px 0 10px;display:flex;align-items:center;gap:8px;}\n"
-"  .section-label::after{content:'';flex:1;height:1px;background:var(--border);}\n"
-"  /* ── MOTOR CARD ── */\n"
-"  .motor-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;}\n"
-"  .motor-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}\n"
-"  .motor-status-text{font-family:var(--font-mono);font-size:24px;font-weight:700;}\n"
-"  .motor-pin-info{font-family:var(--font-mono);font-size:11px;color:var(--muted);}\n"
-"  .motor-speed-row{display:flex;align-items:center;gap:12px;margin:14px 0 6px;}\n"
-"  .motor-speed-label{font-family:var(--font-mono);font-size:11px;color:var(--muted);white-space:nowrap;}\n"
-"  .motor-speed-val{font-family:var(--font-mono);font-size:13px;color:var(--accent);min-width:36px;text-align:right;}\n"
-"  .motor-presets{display:flex;gap:6px;margin-bottom:14px;}\n"
-"  .motor-preset-btn{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);\n"
-"    color:var(--muted);font-family:var(--font-mono);font-size:11px;padding:6px 4px;cursor:pointer;text-align:center;transition:all 0.15s;}\n"
-"  .motor-preset-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.05);}\n"
-"  .motor-preset-btn.active-preset{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.1);}\n"
-"  .motor-btns{display:flex;gap:10px;}\n"
-"  .motor-btn{flex:1;padding:14px 8px;border:1px solid var(--border);border-radius:var(--radius);\n"
-"    background:var(--bg);color:var(--muted);font-family:var(--font-mono);font-size:13px;font-weight:700;\n"
-"    cursor:pointer;text-align:center;transition:all 0.15s;letter-spacing:0.08em;text-transform:uppercase;}\n"
-"  .motor-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.05);}\n"
-"  .motor-btn.active-fwd{border-color:var(--ok);color:var(--ok);background:rgba(34,213,90,0.08);}\n"
-"  .motor-btn.active-bwd{border-color:var(--accent2);color:var(--accent2);background:rgba(255,107,53,0.08);}\n"
-"  .motor-btn.stop-btn{border-color:var(--danger);color:var(--danger);}\n"
-"  .motor-btn.stop-btn:hover{background:rgba(255,59,59,0.08);}\n"
-"  /* ── BUTTON CARD ── */\n"
-"  .btn-pill{display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;\n"
-"    letter-spacing:0.1em;text-transform:uppercase;padding:5px 12px;border-radius:20px;border:1px solid;}\n"
-"  .btn-pill.pressed{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,0.08);}\n"
-"  .btn-pill.released{border-color:var(--muted);color:var(--muted);}\n"
-"</style>\n"
-"</head>\n"
-"<body>\n"
-"<header>\n"
-"  <div class=\"logo\">Smart Factory <span>// Motor + Servo</span></div>\n"
-"  <div class=\"conn-badge disconnected\" id=\"connBadge\"></div>\n"
-"</header>\n"
-"<main>\n"
-"  <div class=\"alert-banner\" id=\"alertBanner\">\n"
-"    <div class=\"alert-dot\"></div>\n"
-"    <strong id=\"alertText\">Alert aktif!</strong>\n"
-"  </div>\n"
-"\n"
-"  <div class=\"section-label\">Status sistem</div>\n"
-"  <div class=\"grid-2\">\n"
-"    <div class=\"card\">\n"
-"      <div class=\"card-title\">MQ-2 Gas/Asap</div>\n"
-"      <div class=\"sensor-value\" id=\"gasVal\">—</div>\n"
-"      <div class=\"sensor-label\">ADC raw (0–4095)</div>\n"
-"      <div id=\"gasPill\" class=\"status-pill offline\">Offline</div>\n"
-"      <div class=\"sensor-bar-wrap\"><div class=\"sensor-bar\" id=\"gasBar\" style=\"width:0%\"></div></div>\n"
-"      <div id=\"warmupSection\" style=\"margin-top:16px;display:none;\">\n"
-"        <div style=\"display:flex;justify-content:space-between;align-items:center;\">\n"
-"          <span style=\"font-size:12px;color:var(--muted);\">MQ-2 warm-up</span>\n"
-"          <span style=\"font-family:var(--font-mono);font-size:12px;color:var(--warn);\" id=\"warmupSec\">20s</span>\n"
-"        </div>\n"
-"        <div class=\"warmup-bar\"><div class=\"warmup-fill\" id=\"warmupFill\" style=\"width:0%\"></div></div>\n"
-"      </div>\n"
-"      <div id=\"warmupDone\" style=\"margin-top:12px;font-size:12px;color:var(--ok);font-family:var(--font-mono);display:none;\">&#10003; MQ-2 siap</div>\n"
-"    </div>\n"
-"    <div class=\"card\">\n"
-"      <div class=\"card-title\">Water Level</div>\n"
-"      <div class=\"sensor-value\" id=\"waterVal\">—</div>\n"
-"      <div class=\"sensor-label\">ADC raw · threshold 800</div>\n"
-"      <div id=\"waterPill\" class=\"status-pill offline\">Offline</div>\n"
-"      <div class=\"sensor-bar-wrap\"><div class=\"sensor-bar\" id=\"waterBar\" style=\"width:0%\"></div></div>\n"
-"    </div>\n"
-"  </div>\n"
-"  <div class=\"grid-2\">\n"
-"    <div class=\"card\">\n"
-"      <div class=\"card-title\">Flame Sensor</div>\n"
-"      <div class=\"sensor-value\" id=\"flameADC\">—</div>\n"
-"      <div class=\"sensor-label\">ADC (A0)</div>\n"
-"      <div id=\"flamePill\" class=\"status-pill offline\">Offline</div>\n"
-"      <div style=\"font-size:11px;color:var(--muted);margin-top:8px;font-family:var(--font-mono);\">D0: <span id=\"flameD0\">—</span></div>\n"
-"    </div>\n"
-"    <div class=\"card\">\n"
-"      <div class=\"card-title\">Push Button (GPIO 5)</div>\n"
-"      <div style=\"margin-top:8px;\">\n"
-"        <div id=\"btnPill\" class=\"btn-pill released\">Released</div>\n"
-"      </div>\n"
-"      <div style=\"font-size:12px;color:var(--muted);margin-top:12px;\">Tekan tombol untuk toggle motor maju/berhenti</div>\n"
-"    </div>\n"
-"  </div>\n"
-"\n"
-"  <div class=\"section-label\">Motor DC (L298N)</div>\n"
-"  <div class=\"motor-card\" style=\"margin-bottom:16px;\">\n"
-"    <div class=\"card-title\">Motor DC — IN1:GPIO4 · IN2:GPIO17 · ENA:GPIO16</div>\n"
-"    <div class=\"motor-top\">\n"
-"      <div class=\"motor-status-text\" id=\"motorStatusText\" style=\"color:var(--muted);\">STOP</div>\n"
-"      <div class=\"motor-pin-info\" id=\"motorPinInfo\">IN1:L &nbsp; IN2:L &nbsp; ENA:0</div>\n"
-"    </div>\n"
-"    <div class=\"motor-speed-row\">\n"
-"      <span class=\"motor-speed-label\">Kecepatan:</span>\n"
-"      <input type=\"range\" min=\"0\" max=\"255\" value=\"200\" step=\"5\" id=\"motorSpeed\"\n"
-"             oninput=\"speedInput(this.value)\" onchange=\"speedSend(this.value)\" style=\"flex:1;\">\n"
-"      <span class=\"motor-speed-val\" id=\"motorSpeedVal\">200</span>\n"
-"    </div>\n"
-"    <div style=\"display:flex;justify-content:flex-end;margin-top:4px;margin-bottom:10px;\">\n"
-"      <span style=\"font-family:var(--font-mono);font-size:11px;color:var(--muted);\" id=\"motorSpeedPct\">78%</span>\n"
-"    </div>\n"
-"    <div class=\"motor-presets\">\n"
-"      <div class=\"motor-preset-btn\" onclick=\"motorPreset(51)\">Pelan<br>20%</div>\n"
-"      <div class=\"motor-preset-btn\" onclick=\"motorPreset(102)\">Lambat<br>40%</div>\n"
-"      <div class=\"motor-preset-btn\" onclick=\"motorPreset(153)\">Sedang<br>60%</div>\n"
-"      <div class=\"motor-preset-btn active-preset\" id=\"mpreset200\" onclick=\"motorPreset(200)\">Cepat<br>78%</div>\n"
-"      <div class=\"motor-preset-btn\" onclick=\"motorPreset(255)\">Maks<br>100%</div>\n"
-"    </div>\n"
-"    <div class=\"motor-btns\">\n"
-"      <div class=\"motor-btn\" id=\"btnFwd\" onclick=\"motorToggle('fwd')\">&#9650; Maju</div>\n"
-"      <div class=\"motor-btn stop-btn\" onclick=\"motorCmd('stop')\">&#9632; Stop</div>\n"
-"      <div class=\"motor-btn\" id=\"btnBwd\" onclick=\"motorToggle('bwd')\">&#9660; Mundur</div>\n"
-"    </div>\n"
-"  </div>\n"
-"\n"
-"  <div class=\"section-label\">Servo control</div>\n"
-"  <div class=\"grid-3\">\n"
-"    <div class=\"servo-card\" id=\"sc1\">\n"
-"      <div class=\"servo-header\"><div class=\"servo-name\">Servo 1 — pin 33</div></div>\n"
-"      <div class=\"servo-angle\" id=\"sa1\">0 <span>deg</span></div>\n"
-"      <div class=\"servo-vis\">\n"
-"        <svg width=\"80\" height=\"50\" viewBox=\"0 0 80 50\">\n"
-"          <path d=\"M10,45 A35,35 0 0,1 70,45\" fill=\"none\" stroke=\"#2a3045\" stroke-width=\"4\" stroke-linecap=\"round\"/>\n"
-"          <line id=\"needle1\" x1=\"40\" y1=\"45\" x2=\"40\" y2=\"12\" stroke=\"#00e5ff\" stroke-width=\"2.5\" stroke-linecap=\"round\"/>\n"
-"          <circle cx=\"40\" cy=\"45\" r=\"4\" fill=\"#00e5ff\"/>\n"
-"        </svg>\n"
-"      </div>\n"
-"      <input type=\"range\" min=\"0\" max=\"180\" value=\"0\" step=\"1\" id=\"sl1\"\n"
-"             oninput=\"servoInput(1,this.value)\" onchange=\"servoSend(1,this.value)\">\n"
-"      <div class=\"servo-presets\">\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(1,0)\">0°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(1,45)\">45°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(1,90)\">90°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(1,135)\">135°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(1,180)\">180°</div>\n"
-"      </div>\n"
-"    </div>\n"
-"    <div class=\"servo-card\" id=\"sc2\">\n"
-"      <div class=\"servo-header\"><div class=\"servo-name\">Servo 2 — pin 19</div></div>\n"
-"      <div class=\"servo-angle\" id=\"sa2\">0 <span>deg</span></div>\n"
-"      <div class=\"servo-vis\">\n"
-"        <svg width=\"80\" height=\"50\" viewBox=\"0 0 80 50\">\n"
-"          <path d=\"M10,45 A35,35 0 0,1 70,45\" fill=\"none\" stroke=\"#2a3045\" stroke-width=\"4\" stroke-linecap=\"round\"/>\n"
-"          <line id=\"needle2\" x1=\"40\" y1=\"45\" x2=\"40\" y2=\"12\" stroke=\"#00e5ff\" stroke-width=\"2.5\" stroke-linecap=\"round\"/>\n"
-"          <circle cx=\"40\" cy=\"45\" r=\"4\" fill=\"#00e5ff\"/>\n"
-"        </svg>\n"
-"      </div>\n"
-"      <input type=\"range\" min=\"0\" max=\"180\" value=\"0\" step=\"1\" id=\"sl2\"\n"
-"             oninput=\"servoInput(2,this.value)\" onchange=\"servoSend(2,this.value)\">\n"
-"      <div class=\"servo-presets\">\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(2,0)\">0°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(2,45)\">45°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(2,90)\">90°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(2,135)\">135°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(2,180)\">180°</div>\n"
-"      </div>\n"
-"    </div>\n"
-"    <div class=\"servo-card\" id=\"sc3\">\n"
-"      <div class=\"servo-header\"><div class=\"servo-name\">Servo 3 — pin 18</div></div>\n"
-"      <div class=\"servo-angle\" id=\"sa3\">0 <span>deg</span></div>\n"
-"      <div class=\"servo-vis\">\n"
-"        <svg width=\"80\" height=\"50\" viewBox=\"0 0 80 50\">\n"
-"          <path d=\"M10,45 A35,35 0 0,1 70,45\" fill=\"none\" stroke=\"#2a3045\" stroke-width=\"4\" stroke-linecap=\"round\"/>\n"
-"          <line id=\"needle3\" x1=\"40\" y1=\"45\" x2=\"40\" y2=\"12\" stroke=\"#00e5ff\" stroke-width=\"2.5\" stroke-linecap=\"round\"/>\n"
-"          <circle cx=\"40\" cy=\"45\" r=\"4\" fill=\"#00e5ff\"/>\n"
-"        </svg>\n"
-"      </div>\n"
-"      <input type=\"range\" min=\"0\" max=\"180\" value=\"0\" step=\"1\" id=\"sl3\"\n"
-"             oninput=\"servoInput(3,this.value)\" onchange=\"servoSend(3,this.value)\">\n"
-"      <div class=\"servo-presets\">\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(3,0)\">0°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(3,45)\">45°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(3,90)\">90°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(3,135)\">135°</div>\n"
-"        <div class=\"preset-btn\" onclick=\"servoPreset(3,180)\">180°</div>\n"
-"      </div>\n"
-"    </div>\n"
-"  </div>\n"
-"  <div style=\"height:32px;\"></div>\n"
-"</main>\n"
-"\n"
-"<script>\n"
-"let ws=null,connected=false;\n"
-"let mq2Ready=false,warmupStartTime=null,warmupInterval=null;\n"
-"let motorState='stop',motorSpeed=200;\n"
-"const MOTOR_PRESETS=[51,102,153,200,255];\n"
-"\n"
-"function setConnBadge(state){\n"
-"  const b=document.getElementById('connBadge');\n"
-"  b.className='conn-badge '+state;\n"
-"  b.textContent={connected:'Connected',disconnected:'Disconnected',connecting:'Connecting...'}[state]||state;\n"
-"}\n"
-"\n"
-"function connectWS(){\n"
-"  setConnBadge('connecting');\n"
-"  ws=new WebSocket('ws://'+window.location.hostname+':81');\n"
-"  ws.onopen=()=>{connected=true;setConnBadge('connected');};\n"
-"  ws.onmessage=(evt)=>{try{const d=JSON.parse(evt.data);if(d.type==='status')updateUI(d);}catch(e){}};\n"
-"  ws.onclose=ws.onerror=()=>{connected=false;ws=null;setConnBadge('disconnected');stopWarmup();setTimeout(connectWS,3000);};\n"
-"}\n"
-"\n"
-"function send(obj){if(ws&&ws.readyState===1)ws.send(JSON.stringify(obj));}\n"
-"\n"
-"function updateUI(d){\n"
-"  const alerts=[];\n"
-"  if(d.gasAlert)   alerts.push('GAS/ASAP');\n"
-"  if(d.waterAlert) alerts.push('AIR BERLEBIH');\n"
-"  if(d.flameAlert) alerts.push('API');\n"
-"  const banner=document.getElementById('alertBanner');\n"
-"  if(alerts.length){\n"
-"    banner.classList.add('active');\n"
-"    document.getElementById('alertText').textContent='\\u26A0 BAHAYA: '+alerts.join(' + ')+'!';\n"
-"  } else {banner.classList.remove('active');}\n"
-"\n"
-"  if(d.mq2Ready){\n"
-"    document.getElementById('gasVal').textContent=d.gasADC;\n"
-"    const gPct=Math.min(100,(d.gasADC/4095)*100);\n"
-"    const gBar=document.getElementById('gasBar');\n"
-"    gBar.style.width=gPct+'%';\n"
-"    gBar.className='sensor-bar'+(d.gasAlert?' alert':gPct>40?' warn':'');\n"
-"    const gp=document.getElementById('gasPill');\n"
-"    gp.className='status-pill '+(d.gasAlert?'danger':'ok');\n"
-"    gp.textContent=d.gasAlert?'ASAP TERDETEKSI':'Normal';\n"
-"  }\n"
-"\n"
-"  document.getElementById('waterVal').textContent=d.waterADC;\n"
-"  const wPct=Math.min(100,(d.waterADC/4095)*100);\n"
-"  const wBar=document.getElementById('waterBar');\n"
-"  wBar.style.width=wPct+'%';\n"
-"  wBar.className='sensor-bar'+(d.waterAlert?' alert':wPct>30?' warn':'');\n"
-"  const wp=document.getElementById('waterPill');\n"
-"  wp.className='status-pill '+(d.waterAlert?'danger':'ok');\n"
-"  wp.textContent=d.waterAlert?'AIR BERLEBIH':'Aman';\n"
-"\n"
-"  document.getElementById('flameADC').textContent=d.flameADC;\n"
-"  document.getElementById('flameD0').textContent=d.flameD0?'HIGH (Api!)':'LOW (Aman)';\n"
-"  const fp=document.getElementById('flamePill');\n"
-"  fp.className='status-pill '+(d.flameAlert?'danger':'ok');\n"
-"  fp.textContent=d.flameAlert?'API TERDETEKSI':'Aman';\n"
-"\n"
-"  const bp=document.getElementById('btnPill');\n"
-"  bp.className='btn-pill '+(d.btnPressed?'pressed':'released');\n"
-"  bp.textContent=d.btnPressed?'Pressed':'Released';\n"
-"\n"
-"  motorState=d.motorState||'stop';\n"
-"  motorSpeed=d.motorSpeed||200;\n"
-"  document.getElementById('motorSpeed').value=motorSpeed;\n"
-"  document.getElementById('motorSpeedVal').textContent=motorSpeed;\n"
-"  document.getElementById('motorSpeedPct').textContent=Math.round(motorSpeed/255*100)+'%';\n"
-"  updateMotorUI();\n"
-"  updateMotorPresetHighlight(motorSpeed);\n"
-"\n"
-"  if(!d.mq2Ready){\n"
-"    document.getElementById('warmupSection').style.display='block';\n"
-"    document.getElementById('warmupDone').style.display='none';\n"
-"    if(!warmupStartTime) startWarmupAnim();\n"
-"  } else {\n"
-"    document.getElementById('warmupSection').style.display='none';\n"
-"    document.getElementById('warmupDone').style.display='block';\n"
-"    stopWarmup(); mq2Ready=true;\n"
-"  }\n"
-"\n"
-"  updateServoUI(1,d.servo1); updateServoUI(2,d.servo2); updateServoUI(3,d.servo3);\n"
-"}\n"
-"\n"
-"function updateMotorUI(){\n"
-"  const st=document.getElementById('motorStatusText');\n"
-"  const bf=document.getElementById('btnFwd');\n"
-"  const bb=document.getElementById('btnBwd');\n"
-"  const pi=document.getElementById('motorPinInfo');\n"
-"  bf.className='motor-btn';\n"
-"  bb.className='motor-btn';\n"
-"  if(motorState==='fwd'){\n"
-"    st.textContent='MAJU'; st.style.color='var(--ok)';\n"
-"    bf.classList.add('active-fwd');\n"
-"    pi.textContent='IN1:H \\u00a0 IN2:L \\u00a0 ENA:'+motorSpeed;\n"
-"  } else if(motorState==='bwd'){\n"
-"    st.textContent='MUNDUR'; st.style.color='var(--accent2)';\n"
-"    bb.classList.add('active-bwd');\n"
-"    pi.textContent='IN1:L \\u00a0 IN2:H \\u00a0 ENA:'+motorSpeed;\n"
-"  } else {\n"
-"    st.textContent='STOP'; st.style.color='var(--muted)';\n"
-"    pi.textContent='IN1:L \\u00a0 IN2:L \\u00a0 ENA:0';\n"
-"  }\n"
-"}\n"
-"\n"
-"/* Toggle: tekan maju saat sudah maju → stop. Begitu juga mundur. */\n"
-"function motorToggle(dir){\n"
-"  if(motorState===dir){motorCmd('stop');}\n"
-"  else {motorCmd(dir);}\n"
-"}\n"
-"\n"
-"function motorCmd(dir){\n"
-"  send({cmd:'motor',dir:dir,speed:motorSpeed});\n"
-"}\n"
-"\n"
-"function motorPreset(v){\n"
-"  motorSpeed=v;\n"
-"  document.getElementById('motorSpeed').value=v;\n"
-"  document.getElementById('motorSpeedVal').textContent=v;\n"
-"  document.getElementById('motorSpeedPct').textContent=Math.round(v/255*100)+'%';\n"
-"  updateMotorPresetHighlight(v);\n"
-"  /* Langsung kirim kecepatan baru, arah ikut state sekarang */\n"
-"  send({cmd:'motor',dir:motorState,speed:v});\n"
-"}\n"
-"\n"
-"function updateMotorPresetHighlight(v){\n"
-"  const btns=document.querySelectorAll('.motor-preset-btn');\n"
-"  MOTOR_PRESETS.forEach((p,i)=>{\n"
-"    btns[i].className='motor-preset-btn'+(p===v?' active-preset':'');\n"
-"  });\n"
-"}\n"
-"\n"
-"function speedInput(v){\n"
-"  v=parseInt(v); motorSpeed=v;\n"
-"  document.getElementById('motorSpeedVal').textContent=v;\n"
-"  document.getElementById('motorSpeedPct').textContent=Math.round(v/255*100)+'%';\n"
-"  updateMotorPresetHighlight(v);\n"
-"}\n"
-"\n"
-"function speedSend(v){\n"
-"  v=parseInt(v); motorSpeed=v;\n"
-"  /* Kirim ke ESP32, arah pakai motorState saat ini */\n"
-"  send({cmd:'motor',dir:motorState,speed:v});\n"
-"}\n"
-"\n"
-"function updateServoUI(id,angle){\n"
-"  document.getElementById('sa'+id).innerHTML=angle+' <span>deg</span>';\n"
-"  document.getElementById('sl'+id).value=angle;\n"
-"  rotateNeedle(id,angle);\n"
-"}\n"
-"\n"
-"function rotateNeedle(id,angle){\n"
-"  const n=document.getElementById('needle'+id); if(!n)return;\n"
-"  const rad=((180-angle)/180)*Math.PI,cx=40,cy=45,len=28;\n"
-"  const ex=cx+len*Math.cos(Math.PI-rad),ey=cy-len*Math.sin(Math.PI-rad);\n"
-"  n.setAttribute('x2',ex.toFixed(1)); n.setAttribute('y2',ey.toFixed(1));\n"
-"}\n"
-"\n"
-"function servoInput(id,val){\n"
-"  val=parseInt(val);\n"
-"  document.getElementById('sa'+id).innerHTML=val+' <span>deg</span>';\n"
-"  rotateNeedle(id,val);\n"
-"  document.getElementById('sc'+id).classList.add('active');\n"
-"}\n"
-"\n"
-"let servoTimer={};\n"
-"function servoSend(id,val){\n"
-"  clearTimeout(servoTimer[id]);\n"
-"  servoTimer[id]=setTimeout(()=>{send({cmd:'servo',id:id,angle:parseInt(val)});document.getElementById('sc'+id).classList.remove('active');},50);\n"
-"}\n"
-"\n"
-"function servoPreset(id,angle){\n"
-"  document.getElementById('sl'+id).value=angle;\n"
-"  servoInput(id,angle); servoSend(id,angle);\n"
-"}\n"
-"\n"
-"function startWarmupAnim(){\n"
-"  warmupStartTime=Date.now();\n"
-"  warmupInterval=setInterval(()=>{\n"
-"    const elapsed=(Date.now()-warmupStartTime)/1000,total=20;\n"
-"    const pct=Math.min(100,(elapsed/total)*100),remaining=Math.max(0,Math.ceil(total-elapsed));\n"
-"    document.getElementById('warmupFill').style.width=pct+'%';\n"
-"    document.getElementById('warmupSec').textContent=remaining+'s';\n"
-"  },200);\n"
-"}\n"
-"\n"
-"function stopWarmup(){if(warmupInterval){clearInterval(warmupInterval);warmupInterval=null;}warmupStartTime=null;}\n"
-"\n"
-"[1,2,3].forEach(id=>rotateNeedle(id,0));\n"
-"connectWS();\n"
-"</script>\n"
-"</body>\n"
-"</html>\n";
+const char DASHBOARD_HTML[] PROGMEM = R"====(
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AIoT Control Panel</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --accent: #00d9ff;
+    --accent2: #ff7043;
+    --text: #e6edf3;
+    --muted: #7d8590;
+    --danger: #f85149;
+    --warn: #e3b341;
+    --ok: #3fb950;
+    --purple: #bc8cff;
+    --radius: 10px;
+    --font: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); min-height: 100vh; font-size: 14px; }
+
+  /* ═══════════════════════════════════════
+     IP CONFIG (untuk akses dari komputer)
+  ═══════════════════════════════════════ */
+  #ipConfigPage {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0,217,255,0.06) 0%, transparent 60%);
+  }
+  .ip-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; padding: 40px 36px; width: 100%; max-width: 400px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  }
+  .ip-logo { text-align: center; margin-bottom: 24px; }
+  .ip-logo .brand { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+  .ip-logo .brand span { color: var(--accent); }
+  .ip-logo .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .ip-hint {
+    font-size: 12px; color: var(--muted); background: var(--surface2);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px;
+    margin-bottom: 20px; line-height: 1.6;
+  }
+  .ip-hint code { color: var(--accent); font-family: monospace; }
+
+  /* ═══════════════════════════════════════
+     LOGIN PAGE
+  ═══════════════════════════════════════ */
+  #loginPage {
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 0%, rgba(0,217,255,0.06) 0%, transparent 60%);
+  }
+  .login-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 40px 36px;
+    width: 100%; max-width: 400px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+  }
+  .login-logo {
+    text-align: center; margin-bottom: 28px;
+  }
+  .login-logo .brand {
+    font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: var(--text);
+  }
+  .login-logo .brand span { color: var(--accent); }
+  .login-logo .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .login-tabs {
+    display: flex; border: 1px solid var(--border); border-radius: 8px;
+    overflow: hidden; margin-bottom: 28px;
+  }
+  .login-tab {
+    flex: 1; padding: 9px 0; text-align: center; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: all 0.2s; color: var(--muted); background: transparent; border: none;
+  }
+  .login-tab.active { background: var(--surface2); color: var(--text); }
+  .login-section { display: none; }
+  .login-section.active { display: block; }
+
+  /* User card */
+  .user-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; text-align: center; cursor: pointer;
+    transition: all 0.2s;
+  }
+  .user-card:hover { border-color: var(--accent); background: rgba(0,217,255,0.04); }
+  .user-card .icon { font-size: 32px; margin-bottom: 10px; }
+  .user-card .title { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .user-card .desc { font-size: 12px; color: var(--muted); }
+
+  /* Admin form */
+  .form-group { margin-bottom: 16px; }
+  .form-label { font-size: 12px; font-weight: 500; color: var(--muted); margin-bottom: 6px; display: block; letter-spacing: 0.04em; text-transform: uppercase; }
+  .form-input {
+    width: 100%; background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; color: var(--text); font-size: 14px;
+    font-family: var(--font); outline: none; transition: border-color 0.15s;
+  }
+  .form-input:focus { border-color: var(--accent); }
+  .form-input::placeholder { color: var(--muted); }
+  .login-btn {
+    width: 100%; background: var(--accent); color: #000; border: none;
+    border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: opacity 0.15s; font-family: var(--font); margin-top: 4px;
+  }
+  .login-btn:hover { opacity: 0.85; }
+  .login-err {
+    display: none; background: rgba(248,81,73,0.08); border: 1px solid rgba(248,81,73,0.3);
+    border-radius: 8px; padding: 10px 14px; font-size: 13px; color: var(--danger);
+    margin-top: 14px; text-align: center;
+  }
+  .login-err.show { display: block; }
+
+  /* ═══════════════════════════════════════
+     MAIN APP (Hidden until login)
+  ═══════════════════════════════════════ */
+  #appPage { display: none; }
+
+  /* HEADER */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px; height: 56px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 14px; }
+  .logo { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+  .logo span { color: var(--accent); }
+  .logo-sub { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .role-badge {
+    font-size: 11px; font-weight: 600; padding: 3px 10px;
+    border-radius: 20px; border: 1px solid; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .role-badge.admin { background: rgba(188,140,255,0.1); color: var(--purple); border-color: rgba(188,140,255,0.3); }
+  .role-badge.user  { background: rgba(0,217,255,0.08); color: var(--accent); border-color: rgba(0,217,255,0.25); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); flex-shrink: 0; }
+  .conn-dot.online { background: var(--ok); animation: pulse-dot 2s infinite; }
+  @keyframes pulse-dot { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .conn-label { font-size: 13px; color: var(--danger); }
+  .conn-label.online { color: var(--ok); }
+  .logout-btn {
+    font-size: 12px; color: var(--muted); background: transparent;
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px;
+    cursor: pointer; font-family: var(--font); transition: all 0.15s;
+  }
+  .logout-btn:hover { color: var(--text); border-color: var(--muted); }
+
+  /* MAIN LAYOUT */
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 20px 48px; }
+
+  /* ALERT */
+  .alert-banner {
+    display: none; align-items: center; gap: 10px;
+    background: rgba(248,81,73,0.08); border: 1px solid rgba(248,81,73,0.4);
+    border-radius: var(--radius); padding: 12px 16px; margin-bottom: 20px;
+    font-size: 13px; color: var(--danger);
+    animation: pulse-border 1.2s infinite;
+  }
+  .alert-banner.active { display: flex; }
+  @keyframes pulse-border { 0%,100%{border-color:rgba(248,81,73,0.4)} 50%{border-color:rgba(248,81,73,0.1)} }
+  .alert-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); animation: blink 0.7s infinite; flex-shrink: 0; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.1} }
+
+  /* SECTION LABEL */
+  .section-label {
+    font-size: 11px; font-weight: 500; letter-spacing: 0.1em;
+    color: var(--muted); text-transform: uppercase;
+    margin: 24px 0 12px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+  /* GRID */
+  .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 12px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 12px; }
+  @media(max-width:900px){ .grid-4{grid-template-columns:1fr 1fr} }
+  @media(max-width:600px){ .grid-4,.grid-2,.grid-3{grid-template-columns:1fr} }
+
+  /* CARD */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+  .card-label { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: var(--muted); text-transform: uppercase; margin-bottom: 12px; }
+  .card-value { font-size: 28px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 2px; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+
+  /* STATUS PILL */
+  .pill { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; padding: 3px 10px; border-radius: 20px; border: 1px solid; }
+  .pill.ok { border-color: rgba(63,185,80,0.4); color: var(--ok); background: rgba(63,185,80,0.08); }
+  .pill.danger { border-color: rgba(248,81,73,0.4); color: var(--danger); background: rgba(248,81,73,0.08); }
+  .pill.offline { border-color: var(--border); color: var(--muted); }
+  .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+  /* PROGRESS BAR */
+  .bar-wrap { background: var(--bg); border-radius: 3px; height: 4px; overflow: hidden; margin-top: 8px; }
+  .bar { height: 100%; border-radius: 3px; transition: width 0.5s, background 0.3s; background: var(--ok); }
+  .bar.warn { background: var(--warn); }
+  .bar.danger { background: var(--danger); }
+
+  /* WARMUP */
+  .warmup-wrap { margin-top: 12px; }
+  .warmup-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; }
+  .warmup-bar { background: var(--bg); border-radius: 3px; height: 4px; overflow: hidden; }
+  .warmup-fill { height: 100%; background: var(--warn); border-radius: 3px; transition: width 1s linear; }
+
+  /* YOLO CARD */
+  .yolo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 20px; }
+  .yolo-icon { width: 48px; height: 48px; border-radius: 10px; background: rgba(0,217,255,0.08); border: 1px solid rgba(0,217,255,0.2); display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 24px; }
+  .yolo-name { font-size: 22px; font-weight: 600; color: var(--accent); margin-bottom: 2px; }
+  .yolo-cat { font-size: 13px; color: var(--muted); }
+  .yolo-servo { margin-top: 8px; font-size: 13px; font-weight: 500; color: var(--ok); }
+
+  /* LIVE VIEW (User) */
+  .live-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 20px; text-align: center; margin-bottom: 12px;
+  }
+  .live-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 4px 12px; border-radius: 20px;
+    background: rgba(248,81,73,0.1); color: var(--danger); border: 1px solid rgba(248,81,73,0.3);
+    margin-bottom: 14px;
+    animation: pulse-border 1.5s infinite;
+  }
+  .live-badge .blink-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger); animation: blink 0.8s infinite; }
+  .live-status-name { font-size: 32px; font-weight: 700; color: var(--accent); margin-bottom: 4px; letter-spacing: -0.02em; }
+  .live-status-cat { font-size: 14px; color: var(--muted); margin-bottom: 12px; }
+  .live-servo-info { font-size: 13px; font-weight: 500; color: var(--ok); padding: 8px 16px; background: rgba(63,185,80,0.06); border: 1px solid rgba(63,185,80,0.2); border-radius: 8px; display: inline-block; }
+  .live-sensor-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 18px; }
+  .live-sensor-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px;
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
+    font-size: 12px; color: var(--muted);
+  }
+  .live-sensor-chip.alert { border-color: rgba(248,81,73,0.4); color: var(--danger); background: rgba(248,81,73,0.06); }
+
+  /* MOTOR CARD */
+  .motor-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; margin-bottom: 12px; }
+  .motor-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+  .motor-state { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; color: var(--muted); }
+  .motor-pins { font-size: 11px; color: var(--muted); font-family: monospace; margin-top: 4px; }
+  .speed-row { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
+  .speed-label { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .speed-val { font-size: 13px; font-weight: 600; color: var(--accent); min-width: 38px; text-align: right; font-family: monospace; }
+
+  input[type=range] { -webkit-appearance: none; width: 100%; height: 3px; background: var(--border); border-radius: 2px; outline: none; cursor: pointer; }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); transition: transform 0.1s; }
+  input[type=range]::-webkit-slider-thumb:active { transform: scale(1.25); }
+
+  .preset-row { display: flex; gap: 6px; margin: 10px 0; }
+  .preset-btn { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 11px; padding: 6px 4px; cursor: pointer; text-align: center; transition: all 0.15s; font-family: monospace; line-height: 1.4; }
+  .preset-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,217,255,0.05); }
+  .preset-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,217,255,0.1); }
+
+  .motor-btns { display: flex; gap: 10px; }
+  .motor-btn { flex: 1; padding: 13px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s; letter-spacing: 0.04em; text-transform: uppercase; }
+  .motor-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,217,255,0.05); }
+  .motor-btn.active-fwd { border-color: var(--ok); color: var(--ok); background: rgba(63,185,80,0.08); }
+  .motor-btn.active-bwd { border-color: var(--accent2); color: var(--accent2); background: rgba(255,112,67,0.08); }
+  .motor-btn.stop-btn { border-color: var(--danger); color: var(--danger); }
+  .motor-btn.stop-btn:hover { background: rgba(248,81,73,0.08); }
+
+  /* SERVO CARDS */
+  .servo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: border-color 0.2s; }
+  .servo-card.active { border-color: rgba(0,217,255,0.5); }
+  .servo-name { font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+  .servo-angle { font-size: 26px; font-weight: 700; color: var(--accent); letter-spacing: -0.02em; margin-bottom: 8px; }
+  .servo-angle span { font-size: 13px; color: var(--muted); font-weight: 400; }
+  .servo-vis { display: flex; justify-content: center; margin: 6px 0 12px; }
+
+  /* BUTTON CARD */
+  .btn-state { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; padding: 4px 12px; border-radius: 20px; border: 1px solid; }
+  .btn-state.pressed { border-color: rgba(0,217,255,0.4); color: var(--accent); background: rgba(0,217,255,0.08); }
+  .btn-state.released { border-color: var(--border); color: var(--muted); }
+
+  /* ADMIN ONLY sections */
+  .admin-only { display: none; }
+
+  /* ═══════════════════════════════════════
+     TOAST NOTIFICATION
+  ═══════════════════════════════════════ */
+  .toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 18px; font-size: 13px; color: var(--text);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    transform: translateY(80px); opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    z-index: 9999; pointer-events: none;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ IP CONFIG PAGE ═══════════════════════════════════════ -->
+<div id="ipConfigPage" style="display:none;">
+  <div class="ip-box">
+    <div class="ip-logo">
+      <div class="brand">AIoT <span>Control Panel</span></div>
+      <div class="sub">Konfigurasi Koneksi ESP32</div>
+    </div>
+    <div class="ip-hint">
+      Halaman ini dibuka dari komputer secara lokal.<br>
+      Masukkan <strong>IP Address</strong> dari ESP32 Smart Bin kamu.<br>
+      <code>Contoh: 10.132.39.50</code>
+    </div>
+    <div class="form-group">
+      <label class="form-label">IP Address ESP32</label>
+      <input class="form-input" type="text" id="esp32IpInput" placeholder="10.132.39.xx" autocomplete="off"
+             onkeydown="if(event.key==='Enter')saveIp()">
+    </div>
+    <button class="login-btn" onclick="saveIp()">Hubungkan →</button>
+    <div class="login-err" id="ipErr">Masukkan IP Address yang valid.</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ LOGIN PAGE ═══════════════════════════════════════ -->
+<div id="loginPage">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="brand">AIoT <span>Control Panel</span></div>
+      <div class="sub">Sistem Deteksi Limbah Medis</div>
+    </div>
+
+    <div class="login-tabs">
+      <button class="login-tab active" id="tabUser" onclick="switchTab('user')">👤 Pengguna</button>
+      <button class="login-tab" id="tabAdmin" onclick="switchTab('admin')">🛡 Admin</button>
+    </div>
+
+    <!-- User tab -->
+    <div class="login-section active" id="sectionUser">
+      <div class="user-card" onclick="loginAsUser()">
+        <div class="icon">👁</div>
+        <div class="title">Masuk sebagai Pengguna</div>
+        <div class="desc">Akses live view status sistem & deteksi limbah.<br>Tidak ada kontrol perangkat.</div>
+      </div>
+    </div>
+
+    <!-- Admin tab -->
+    <div class="login-section" id="sectionAdmin">
+      <div class="form-group">
+        <label class="form-label">Username</label>
+        <input class="form-input" type="text" id="adminUser" placeholder="Masukkan username" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Password</label>
+        <input class="form-input" type="password" id="adminPass" placeholder="Masukkan password" onkeydown="if(event.key==='Enter')doAdminLogin()">
+      </div>
+      <button class="login-btn" onclick="doAdminLogin()">Masuk sebagai Admin</button>
+      <div class="login-err" id="loginErr">Username atau password salah.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ APP PAGE ═══════════════════════════════════════ -->
+<div id="appPage">
+
+<header>
+  <div class="header-left">
+    <div>
+      <div class="logo">AIoT <span>Control Panel</span></div>
+      <div class="logo-sub">Sistem Deteksi Limbah Medis</div>
+    </div>
+    <span class="role-badge" id="roleBadge">User</span>
+  </div>
+  <div class="header-right">
+    <div style="display:flex;align-items:center;gap:7px;">
+      <div class="conn-dot" id="connDot"></div>
+      <span class="conn-label" id="connLabel" style="margin-right:8px;">Offline</span>
+      <button style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;" onclick="connectWS()">Reconnect</button>
+    </div>
+    <button class="logout-btn" onclick="doLogout()">← Keluar</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ALERT -->
+  <div class="alert-banner" id="alertBanner">
+    <div class="alert-dot"></div>
+    <strong id="alertText">Alert aktif!</strong>
+  </div>
+
+  <!-- ═══ USER: LIVE VIEW ═══ -->
+  <div id="userView">
+    <div class="section-label">Live Deteksi Kamera</div>
+    <div class="live-card">
+      <div class="live-badge"><span class="blink-dot"></span> Live</div>
+      <div class="live-status-name" id="liveWasteName">Tidak Ada</div>
+      <div class="live-status-cat" id="liveWasteCat">Kategori: —</div>
+      <div id="liveServoInfo" class="live-servo-info" style="display:none;"></div>
+    </div>
+    <div class="section-label">Status Sensor</div>
+    <div class="live-sensor-row">
+      <div class="live-sensor-chip" id="chipGas">🔴 Gas: —</div>
+      <div class="live-sensor-chip" id="chipWater">💧 Air: —</div>
+      <div class="live-sensor-chip" id="chipFlame">🔥 Api: —</div>
+      <div class="live-sensor-chip" id="chipMotor">⚙ Motor: —</div>
+    </div>
+  </div>
+
+  <!-- ═══ ADMIN: FULL PANEL ═══ -->
+  <div class="admin-only" id="adminView">
+
+    <!-- SENSORS -->
+    <div class="section-label">Status Sensor</div>
+    <div class="grid-4">
+      <div class="card">
+        <div class="card-label">MQ-2 Gas / Asap</div>
+        <div class="card-value" id="gasVal" style="color:var(--purple);">—</div>
+        <div class="card-sub">ADC raw (0–4095)</div>
+        <div id="gasPill" class="pill offline"><span class="pill-dot"></span>Offline</div>
+        <div class="bar-wrap"><div class="bar" id="gasBar" style="width:0%"></div></div>
+        <div id="warmupSection" style="display:none;" class="warmup-wrap">
+          <div class="warmup-row">
+            <span style="color:var(--muted);">MQ-2 warm-up</span>
+            <span style="color:var(--warn);font-family:monospace;font-size:12px;" id="warmupSec">20s</span>
+          </div>
+          <div class="warmup-bar"><div class="warmup-fill" id="warmupFill" style="width:0%"></div></div>
+        </div>
+        <div id="warmupDone" style="display:none;margin-top:10px;font-size:12px;color:var(--ok);font-family:monospace;">✓ MQ-2 siap</div>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Water Level</div>
+        <div class="card-value" id="waterVal" style="color:#58a6ff;">—</div>
+        <div class="card-sub">ADC raw · threshold 800</div>
+        <div id="waterPill" class="pill offline"><span class="pill-dot"></span>Offline</div>
+        <div class="bar-wrap"><div class="bar" id="waterBar" style="width:0%"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Flame Sensor</div>
+        <div class="card-value" id="flameADC" style="color:var(--accent2);">—</div>
+        <div class="card-sub">ADC (A0)</div>
+        <div id="flamePill" class="pill offline"><span class="pill-dot"></span>Offline</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:8px;font-family:monospace;">D0: <span id="flameD0">—</span></div>
+      </div>
+
+      <div class="card">
+        <div class="card-label">Push Button GPIO 5</div>
+        <div style="margin: 12px 0 8px;">
+          <div id="btnPill" class="btn-state released"><span class="pill-dot"></span>Released</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;">Toggle motor maju / berhenti</div>
+      </div>
+    </div>
+
+    <!-- YOLO -->
+    <div class="section-label">Deteksi YOLOv8 Kamera</div>
+    <div class="yolo-card">
+      <div class="yolo-icon">🔍</div>
+      <div>
+        <div class="yolo-name" id="wasteName">Tidak Ada</div>
+        <div class="yolo-cat" id="wasteCat">Kategori: —</div>
+        <div id="wasteServoInfo" class="yolo-servo" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- MOTOR -->
+    <div class="section-label">Motor DC (L298N)</div>
+    <div class="motor-card">
+      <div class="card-label" style="margin-bottom:10px;">IN1: GPIO4 &nbsp;·&nbsp; IN2: GPIO17 &nbsp;·&nbsp; ENA: GPIO16</div>
+      <div class="motor-head">
+        <div>
+          <div class="motor-state" id="motorStatusText">STOP</div>
+          <div class="motor-pins" id="motorPinInfo">IN1:L &nbsp; IN2:L &nbsp; ENA:0</div>
+        </div>
+        <div style="text-align:right;">
+          <div id="motorSpeedPct" style="font-size:22px;font-weight:700;color:var(--accent);font-family:monospace;">78%</div>
+          <div style="font-size:11px;color:var(--muted);">kecepatan</div>
+        </div>
+      </div>
+      <div class="speed-row">
+        <span class="speed-label">Kecepatan</span>
+        <input type="range" min="0" max="255" value="200" step="5" id="motorSpeed"
+               oninput="speedInput(this.value)" onchange="speedSend(this.value)" style="flex:1;">
+        <span class="speed-val" id="motorSpeedVal">200</span>
+      </div>
+      <div class="preset-row">
+        <div class="preset-btn" onclick="motorPreset(51)">Pelan<br>20%</div>
+        <div class="preset-btn" onclick="motorPreset(102)">Lambat<br>40%</div>
+        <div class="preset-btn" onclick="motorPreset(153)">Sedang<br>60%</div>
+        <div class="preset-btn active" id="mpreset200" onclick="motorPreset(200)">Cepat<br>78%</div>
+        <div class="preset-btn" onclick="motorPreset(255)">Maks<br>100%</div>
+      </div>
+      <div class="motor-btns">
+        <div class="motor-btn" id="btnFwd" onclick="motorToggle('fwd')">▲ Maju</div>
+        <div class="motor-btn stop-btn" onclick="motorCmd('stop')">■ Stop</div>
+        <div class="motor-btn" id="btnBwd" onclick="motorToggle('bwd')">▼ Mundur</div>
+      </div>
+    </div>
+
+    <!-- SERVO -->
+    <div class="section-label">Servo Control</div>
+    <div class="grid-3">
+      <div class="servo-card" id="sc1">
+        <div class="servo-name">Servo 1 — Infeksius (Pin 33)</div>
+        <div class="servo-angle" id="sa1">0 <span>deg</span></div>
+        <div class="servo-vis">
+          <svg width="80" height="50" viewBox="0 0 80 50">
+            <path d="M10,45 A35,35 0 0,1 70,45" fill="none" stroke="#30363d" stroke-width="4" stroke-linecap="round"/>
+            <line id="needle1" x1="40" y1="45" x2="40" y2="12" stroke="#00d9ff" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="40" cy="45" r="4" fill="#00d9ff"/>
+          </svg>
+        </div>
+        <input type="range" min="0" max="180" value="0" step="1" id="sl1"
+               oninput="servoInput(1,this.value)" onchange="servoSend(1,this.value)">
+        <div class="preset-row" style="margin-top:10px;">
+          <div class="preset-btn" onclick="servoPreset(1,0)">0°</div>
+          <div class="preset-btn" onclick="servoPreset(1,45)">45°</div>
+          <div class="preset-btn" onclick="servoPreset(1,90)">90°</div>
+          <div class="preset-btn" onclick="servoPreset(1,135)">135°</div>
+          <div class="preset-btn" onclick="servoPreset(1,180)">180°</div>
+        </div>
+      </div>
+
+      <div class="servo-card" id="sc2">
+        <div class="servo-name">Servo 2 — Non-Infeksius (Pin 19)</div>
+        <div class="servo-angle" id="sa2">0 <span>deg</span></div>
+        <div class="servo-vis">
+          <svg width="80" height="50" viewBox="0 0 80 50">
+            <path d="M10,45 A35,35 0 0,1 70,45" fill="none" stroke="#30363d" stroke-width="4" stroke-linecap="round"/>
+            <line id="needle2" x1="40" y1="45" x2="40" y2="12" stroke="#00d9ff" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="40" cy="45" r="4" fill="#00d9ff"/>
+          </svg>
+        </div>
+        <input type="range" min="0" max="180" value="0" step="1" id="sl2"
+               oninput="servoInput(2,this.value)" onchange="servoSend(2,this.value)">
+        <div class="preset-row" style="margin-top:10px;">
+          <div class="preset-btn" onclick="servoPreset(2,0)">0°</div>
+          <div class="preset-btn" onclick="servoPreset(2,45)">45°</div>
+          <div class="preset-btn" onclick="servoPreset(2,90)">90°</div>
+          <div class="preset-btn" onclick="servoPreset(2,135)">135°</div>
+          <div class="preset-btn" onclick="servoPreset(2,180)">180°</div>
+        </div>
+      </div>
+
+      <div class="servo-card" id="sc3">
+        <div class="servo-name">Servo 3 — B3 (Pin 18)</div>
+        <div class="servo-angle" id="sa3">0 <span>deg</span></div>
+        <div class="servo-vis">
+          <svg width="80" height="50" viewBox="0 0 80 50">
+            <path d="M10,45 A35,35 0 0,1 70,45" fill="none" stroke="#30363d" stroke-width="4" stroke-linecap="round"/>
+            <line id="needle3" x1="40" y1="45" x2="40" y2="12" stroke="#00d9ff" stroke-width="2.5" stroke-linecap="round"/>
+            <circle cx="40" cy="45" r="4" fill="#00d9ff"/>
+          </svg>
+        </div>
+        <input type="range" min="0" max="180" value="0" step="1" id="sl3"
+               oninput="servoInput(3,this.value)" onchange="servoSend(3,this.value)">
+        <div class="preset-row" style="margin-top:10px;">
+          <div class="preset-btn" onclick="servoPreset(3,0)">0°</div>
+          <div class="preset-btn" onclick="servoPreset(3,45)">45°</div>
+          <div class="preset-btn" onclick="servoPreset(3,90)">90°</div>
+          <div class="preset-btn" onclick="servoPreset(3,135)">135°</div>
+          <div class="preset-btn" onclick="servoPreset(3,180)">180°</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /adminView -->
+
+</main>
+</div><!-- /appPage -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════
+//  IP CONFIG
+// ═══════════════════════════════════════
+// HARDCODED ESP32 IP karena IP statis selalu 192.168.4.3
+let esp32Host = '192.168.4.3';
+
+function saveIp() {
+  const ip = document.getElementById('esp32IpInput').value.trim();
+  const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/;
+  if (!ipRegex.test(ip)) {
+    document.getElementById('ipErr').className = 'login-err show';
+    return;
+  }
+  esp32Host = ip;
+  document.getElementById('ipConfigPage').style.display = 'none';
+  document.getElementById('loginPage').style.display = 'flex';
+}
+
+// Saat halaman dimuat: cek apakah dibuka sebagai file lokal
+window.addEventListener('load', () => {
+  // Selalu tampilkan halaman login terlepas dari bagaimana file dibuka (localhost atau klik ganda langsung)
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('ipConfigPage').style.display = 'none';
+});
+
+// ═══════════════════════════════════════
+//  AUTH
+// ═══════════════════════════════════════
+const ADMIN_USER = 'Admin';
+const ADMIN_PASS = 'Admin123';
+let currentRole = null; // 'user' | 'admin'
+
+function switchTab(tab) {
+  document.getElementById('tabUser').className = 'login-tab' + (tab === 'user' ? ' active' : '');
+  document.getElementById('tabAdmin').className = 'login-tab' + (tab === 'admin' ? ' active' : '');
+  document.getElementById('sectionUser').className = 'login-section' + (tab === 'user' ? ' active' : '');
+  document.getElementById('sectionAdmin').className = 'login-section' + (tab === 'admin' ? ' active' : '');
+}
+
+function loginAsUser() {
+  currentRole = 'user';
+  enterApp();
+}
+
+function doAdminLogin() {
+  const u = document.getElementById('adminUser').value.trim();
+  const p = document.getElementById('adminPass').value;
+  if (u === ADMIN_USER && p === ADMIN_PASS) {
+    currentRole = 'admin';
+    enterApp();
+  } else {
+    document.getElementById('loginErr').className = 'login-err show';
+    document.getElementById('adminPass').value = '';
+  }
+}
+
+function enterApp() {
+  document.getElementById('loginPage').style.display = 'none';
+  document.getElementById('appPage').style.display = 'block';
+
+  const badge = document.getElementById('roleBadge');
+  if (currentRole === 'admin') {
+    badge.textContent = 'Admin';
+    badge.className = 'role-badge admin';
+    document.getElementById('adminView').style.display = 'block';
+    document.getElementById('userView').style.display = 'none';
+  } else {
+    badge.textContent = 'Pengguna';
+    badge.className = 'role-badge user';
+    document.getElementById('adminView').style.display = 'none';
+    document.getElementById('userView').style.display = 'block';
+  }
+
+  connectWS();
+  showToast('Selamat datang, ' + (currentRole === 'admin' ? 'Admin' : 'Pengguna') + '!');
+}
+
+function doLogout() {
+  currentRole = null;
+  if (ws) { try { ws.close(); } catch(e){} ws = null; }
+  document.getElementById('appPage').style.display = 'none';
+  document.getElementById('loginPage').style.display = 'flex';
+  document.getElementById('adminUser').value = '';
+  document.getElementById('adminPass').value = '';
+  document.getElementById('loginErr').className = 'login-err';
+}
+
+// ═══════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.className = 'toast'; }, 2800);
+}
+
+// ═══════════════════════════════════════
+//  WEBSOCKET
+// ═══════════════════════════════════════
+let ws = null, connected = false;
+let mq2Ready = false, warmupStartTime = null, warmupInterval = null;
+let motorState = 'stop', motorSpeed = 200;
+const MOTOR_PRESETS = [51, 102, 153, 200, 255];
+
+function setConn(state) {
+  const dot = document.getElementById('connDot');
+  const lbl = document.getElementById('connLabel');
+  if (state === 'connected') {
+    dot.className = 'conn-dot online';
+    lbl.className = 'conn-label online';
+    lbl.textContent = 'Online (' + esp32Host + ')';
+  } else if (state === 'connecting') {
+    dot.style.background = 'var(--warn)'; dot.className = 'conn-dot';
+    lbl.style.color = 'var(--warn)'; lbl.className = 'conn-label';
+    lbl.textContent = 'Menghubungkan...';
+  } else {
+    dot.style.background = ''; dot.className = 'conn-dot';
+    lbl.style.color = ''; lbl.className = 'conn-label';
+    lbl.textContent = 'Offline (' + esp32Host + ')';
+  }
+}
+
+function connectWS() {
+  setConn('connecting');
+  ws = new WebSocket('ws://' + esp32Host + ':81');
+  ws.onopen = () => { connected = true; setConn('connected'); };
+  ws.onmessage = (evt) => { try { const d = JSON.parse(evt.data); if (d.type === 'status') updateUI(d); } catch(e){} };
+  ws.onclose = ws.onerror = () => { connected = false; ws = null; setConn('disconnected'); stopWarmup(); setTimeout(connectWS, 3000); };
+}
+
+function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
+
+// ═══════════════════════════════════════
+//  UPDATE UI
+// ═══════════════════════════════════════
+function updateUI(d) {
+  // ── ALERTS ──
+  const alerts = [];
+  if (d.gasAlert)   alerts.push('GAS/ASAP');
+  if (d.waterAlert) alerts.push('AIR BERLEBIH');
+  if (d.flameAlert) alerts.push('API');
+  const banner = document.getElementById('alertBanner');
+  if (alerts.length) {
+    banner.classList.add('active');
+    document.getElementById('alertText').textContent = '⚠ BAHAYA: ' + alerts.join(' + ') + '!';
+  } else { banner.classList.remove('active'); }
+
+  // ── YOLO DETECTION (shared data) ──
+  const wasteName  = d.wasteName || 'Tidak Ada';
+  const wasteCat   = d.wasteCat  || '—';
+  const servoNames = { 1: '▸ Servo 1 — Infeksius (Kantong Kuning)', 2: '▸ Servo 2 — Non-Infeksius (Kantong Hitam)', 3: '▸ Servo 3 — B3 (Kantong Merah)' };
+  const servoText  = (d.servoActive && d.servoActive > 0 && wasteName !== 'Tidak Ada')
+                     ? (servoNames[d.servoActive] || '▸ Servo ' + d.servoActive) : null;
+
+  // User live view
+  if (document.getElementById('userView').style.display !== 'none') {
+    document.getElementById('liveWasteName').textContent = wasteName;
+    document.getElementById('liveWasteCat').textContent = 'Kategori: ' + wasteCat;
+    const lsi = document.getElementById('liveServoInfo');
+    if (servoText) { lsi.textContent = servoText; lsi.style.display = 'inline-block'; }
+    else { lsi.style.display = 'none'; }
+
+    const chipGas   = document.getElementById('chipGas');
+    const chipWater = document.getElementById('chipWater');
+    const chipFlame = document.getElementById('chipFlame');
+    const chipMotor = document.getElementById('chipMotor');
+    chipGas.className   = 'live-sensor-chip' + (d.gasAlert ? ' alert' : '');
+    chipGas.textContent = '🟣 Gas: ' + (d.gasADC !== undefined ? d.gasADC : '—');
+    chipWater.className = 'live-sensor-chip' + (d.waterAlert ? ' alert' : '');
+    chipWater.textContent = '💧 Air: ' + (d.waterADC !== undefined ? d.waterADC : '—');
+    chipFlame.className = 'live-sensor-chip' + (d.flameAlert ? ' alert' : '');
+    chipFlame.textContent = '🔥 Api: ' + (d.flameAlert ? 'TERDETEKSI' : 'Aman');
+    chipMotor.textContent = '⚙ Motor: ' + (d.motorState || 'stop').toUpperCase();
+  }
+
+  // Admin full panel
+  if (document.getElementById('adminView').style.display !== 'none') {
+    // Gas
+    if (d.mq2Ready) {
+      document.getElementById('gasVal').textContent = d.gasADC;
+      const gPct = Math.min(100, (d.gasADC / 4095) * 100);
+      const gBar = document.getElementById('gasBar');
+      gBar.style.width = gPct + '%';
+      gBar.className = 'bar' + (d.gasAlert ? ' danger' : gPct > 40 ? ' warn' : '');
+      const gp = document.getElementById('gasPill');
+      gp.className = 'pill ' + (d.gasAlert ? 'danger' : 'ok');
+      gp.innerHTML = '<span class="pill-dot"></span>' + (d.gasAlert ? 'Asap Terdeteksi' : 'Normal');
+    }
+
+    // Water
+    document.getElementById('waterVal').textContent = d.waterADC;
+    const wPct = Math.min(100, (d.waterADC / 4095) * 100);
+    const wBar = document.getElementById('waterBar');
+    wBar.style.width = wPct + '%';
+    wBar.className = 'bar' + (d.waterAlert ? ' danger' : wPct > 30 ? ' warn' : '');
+    const wp = document.getElementById('waterPill');
+    wp.className = 'pill ' + (d.waterAlert ? 'danger' : 'ok');
+    wp.innerHTML = '<span class="pill-dot"></span>' + (d.waterAlert ? 'Air Berlebih' : 'Aman');
+
+    // Flame
+    document.getElementById('flameADC').textContent = d.flameADC;
+    document.getElementById('flameD0').textContent = d.flameD0 ? 'HIGH (Api!)' : 'LOW (Aman)';
+    const fp = document.getElementById('flamePill');
+    fp.className = 'pill ' + (d.flameAlert ? 'danger' : 'ok');
+    fp.innerHTML = '<span class="pill-dot"></span>' + (d.flameAlert ? 'Api Terdeteksi' : 'Aman');
+
+    // Button
+    const bp = document.getElementById('btnPill');
+    bp.className = 'btn-state ' + (d.btnPressed ? 'pressed' : 'released');
+    bp.innerHTML = '<span class="pill-dot"></span>' + (d.btnPressed ? 'Pressed' : 'Released');
+
+    // Motor
+    motorState = d.motorState || 'stop';
+    motorSpeed = d.motorSpeed || 200;
+    document.getElementById('motorSpeed').value = motorSpeed;
+    document.getElementById('motorSpeedVal').textContent = motorSpeed;
+    document.getElementById('motorSpeedPct').textContent = Math.round(motorSpeed / 255 * 100) + '%';
+    updateMotorUI();
+    updateMotorPresetHighlight(motorSpeed);
+
+    // Warmup
+    if (!d.mq2Ready) {
+      document.getElementById('warmupSection').style.display = 'block';
+      document.getElementById('warmupDone').style.display = 'none';
+      if (!warmupStartTime) startWarmupAnim();
+    } else {
+      document.getElementById('warmupSection').style.display = 'none';
+      document.getElementById('warmupDone').style.display = 'block';
+      stopWarmup(); mq2Ready = true;
+    }
+
+    // YOLO
+    document.getElementById('wasteName').textContent = wasteName;
+    document.getElementById('wasteCat').textContent = 'Kategori: ' + wasteCat;
+    const si = document.getElementById('wasteServoInfo');
+    if (servoText) { si.textContent = servoText; si.style.display = 'block'; }
+    else { si.style.display = 'none'; }
+
+    // Servo
+    updateServoUI(1, d.servo1);
+    updateServoUI(2, d.servo2);
+    updateServoUI(3, d.servo3);
+  }
+}
+
+// ═══════════════════════════════════════
+//  MOTOR
+// ═══════════════════════════════════════
+function updateMotorUI() {
+  const st = document.getElementById('motorStatusText');
+  const bf = document.getElementById('btnFwd');
+  const bb = document.getElementById('btnBwd');
+  const pi = document.getElementById('motorPinInfo');
+  bf.className = 'motor-btn'; bb.className = 'motor-btn';
+  if (motorState === 'fwd') {
+    st.textContent = 'MAJU'; st.style.color = 'var(--ok)';
+    bf.classList.add('active-fwd');
+    pi.textContent = 'IN1:H   IN2:L   ENA:' + motorSpeed;
+  } else if (motorState === 'bwd') {
+    st.textContent = 'MUNDUR'; st.style.color = 'var(--accent2)';
+    bb.classList.add('active-bwd');
+    pi.textContent = 'IN1:L   IN2:H   ENA:' + motorSpeed;
+  } else {
+    st.textContent = 'STOP'; st.style.color = 'var(--muted)';
+    pi.textContent = 'IN1:L   IN2:L   ENA:0';
+  }
+}
+
+function motorToggle(dir) { if (motorState === dir) motorCmd('stop'); else motorCmd(dir); }
+function motorCmd(dir) { send({ cmd: 'motor', dir: dir, speed: motorSpeed }); }
+
+function motorPreset(v) {
+  motorSpeed = v;
+  document.getElementById('motorSpeed').value = v;
+  document.getElementById('motorSpeedVal').textContent = v;
+  document.getElementById('motorSpeedPct').textContent = Math.round(v / 255 * 100) + '%';
+  updateMotorPresetHighlight(v);
+  send({ cmd: 'motor', dir: motorState, speed: v });
+}
+
+function updateMotorPresetHighlight(v) {
+  const btns = document.querySelectorAll('.motor-card .preset-btn');
+  MOTOR_PRESETS.forEach((p, i) => { btns[i].className = 'preset-btn' + (p === v ? ' active' : ''); });
+}
+
+function speedInput(v) {
+  v = parseInt(v); motorSpeed = v;
+  document.getElementById('motorSpeedVal').textContent = v;
+  document.getElementById('motorSpeedPct').textContent = Math.round(v / 255 * 100) + '%';
+  updateMotorPresetHighlight(v);
+}
+function speedSend(v) { v = parseInt(v); motorSpeed = v; send({ cmd: 'motor', dir: motorState, speed: v }); }
+
+// ═══════════════════════════════════════
+//  SERVO
+// ═══════════════════════════════════════
+function updateServoUI(id, angle) {
+  if (angle === undefined) return;
+  document.getElementById('sa' + id).innerHTML = angle + ' <span>deg</span>';
+  document.getElementById('sl' + id).value = angle;
+  rotateNeedle(id, angle);
+}
+
+function rotateNeedle(id, angle) {
+  const n = document.getElementById('needle' + id); if (!n) return;
+  const rad = ((180 - angle) / 180) * Math.PI, cx = 40, cy = 45, len = 28;
+  const ex = cx + len * Math.cos(Math.PI - rad), ey = cy - len * Math.sin(Math.PI - rad);
+  n.setAttribute('x2', ex.toFixed(1)); n.setAttribute('y2', ey.toFixed(1));
+}
+
+function servoInput(id, val) {
+  val = parseInt(val);
+  document.getElementById('sa' + id).innerHTML = val + ' <span>deg</span>';
+  rotateNeedle(id, val);
+  document.getElementById('sc' + id).classList.add('active');
+}
+
+let servoTimer = {};
+function servoSend(id, val) {
+  clearTimeout(servoTimer[id]);
+  servoTimer[id] = setTimeout(() => {
+    send({ cmd: 'servo', id: id, angle: parseInt(val) });
+    document.getElementById('sc' + id).classList.remove('active');
+  }, 50);
+}
+function servoPreset(id, angle) {
+  document.getElementById('sl' + id).value = angle;
+  servoInput(id, angle); servoSend(id, angle);
+}
+
+// ═══════════════════════════════════════
+//  MQ-2 WARMUP ANIMATION
+// ═══════════════════════════════════════
+function startWarmupAnim() {
+  warmupStartTime = Date.now();
+  warmupInterval = setInterval(() => {
+    const elapsed = (Date.now() - warmupStartTime) / 1000, total = 20;
+    const pct = Math.min(100, (elapsed / total) * 100), remaining = Math.max(0, Math.ceil(total - elapsed));
+    document.getElementById('warmupFill').style.width = pct + '%';
+    document.getElementById('warmupSec').textContent = remaining + 's';
+  }, 200);
+}
+function stopWarmup() { if (warmupInterval) { clearInterval(warmupInterval); warmupInterval = null; } warmupStartTime = null; }
+
+[1, 2, 3].forEach(id => rotateNeedle(id, 0));
+</script>
+</body>
+</html>
+
+)====";
 
 // ─────────────────────────────────────────────────────────────
 //  OBJEK
@@ -581,6 +1066,11 @@ bool   flameAlert = false;
 int    servoAngle1 = 0;
 int    servoAngle2 = 0;
 int    servoAngle3 = 0;
+
+// Waste Detection
+String lastWasteName = "Tidak Ada";
+String lastWasteCategory = "-";
+int    lastActiveServo = 0;  // 0 = tidak ada, 1/2/3 = servo aktif
 
 // Motor
 String   motorState = "stop";   // "fwd" | "bwd" | "stop"
@@ -712,6 +1202,13 @@ void setup() {
   lcd.setCursor(0, 0); lcd.print("Connecting WiFi");
   lcd.setCursor(0, 1); lcd.print(WIFI_SSID);
 
+  // ── IP Statis agar Python selalu bisa connect ke alamat ini ──
+  // IP Statis dinonaktifkan — biar dapat IP otomatis dari router/hotspot HP
+  // IPAddress staticIP(192, 168, 4, 3);
+  // IPAddress gateway(192, 168, 4, 1);
+  // IPAddress subnet(255, 255, 255, 0);
+  // WiFi.config(staticIP, gateway, subnet);
+
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   Serial.print("[WiFi] Connecting");
   int tries = 0;
@@ -736,6 +1233,58 @@ void setup() {
   server.on("/", HTTP_GET, []() {
     server.send_P(200, "text/html", DASHBOARD_HTML);
   });
+
+  // --- JALUR HTTP KHUSUS UNTUK PYTHON YOLO (TEKNIK DRONE) ---
+  server.on("/api", HTTP_GET, []() {
+    if (server.hasArg("cmd")) {
+      String cmd = server.arg("cmd");
+      
+      if (cmd == "servo") {
+        int id = server.arg("id").toInt();
+        int angle = server.arg("angle").toInt();
+        if (id == 1) { servo1.write(angle); servoAngle1 = angle; }
+        else if (id == 2) { servo2.write(angle); servoAngle2 = angle; }
+        else if (id == 3) { servo3.write(angle); servoAngle3 = angle; }
+        
+        if (server.hasArg("waste")) {
+          lastWasteName = server.arg("waste");
+        }
+        if (server.hasArg("cat")) {
+          lastWasteCategory = server.arg("cat");
+        }
+        
+        // Catat servo mana yang aktif (angle > 0 = terbuka, 0 = tertutup)
+        if (angle > 0) {
+          lastActiveServo = id;
+        } else if (id == lastActiveServo) {
+          lastActiveServo = 0;
+        }
+        
+        Serial.printf("[HTTP] Servo %d -> %d deg, Objek: %s\n", id, angle, lastWasteName.c_str());
+        server.send(200, "text/plain", "OK");
+        broadcastStatus();  // Langsung update ke dashboard web
+      }
+      else if (cmd == "machine") {
+        String onStr = server.arg("on");
+        if (onStr.equalsIgnoreCase("true")) {
+          setMotor("fwd", motorSpeed);
+          Serial.println("[HTTP] Mesin ON");
+        } else {
+          stopMotor();
+          Serial.println("[HTTP] Mesin OFF");
+        }
+        server.send(200, "text/plain", "OK");
+      }
+      else {
+        server.send(400, "text/plain", "Unknown command");
+      }
+      
+      broadcastStatus(); // Update Dashboard Web UI
+    } else {
+      server.send(400, "text/plain", "Missing cmd argument");
+    }
+  });
+
   server.onNotFound([]() {
     server.sendHeader("Location", "/");
     server.send(302, "text/plain", "");
@@ -918,7 +1467,7 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
 //  STATUS JSON
 // ─────────────────────────────────────────────────────────────
 String buildStatusJson() {
-  StaticJsonDocument<512> doc;
+  StaticJsonDocument<768> doc;
   doc["type"]       = "status";
   doc["gasAlert"]   = gasAlert;
   doc["waterAlert"] = waterAlert;
@@ -930,6 +1479,9 @@ String buildStatusJson() {
   doc["servo1"]     = servoAngle1;
   doc["servo2"]     = servoAngle2;
   doc["servo3"]     = servoAngle3;
+  doc["wasteName"]   = lastWasteName;
+  doc["wasteCat"]    = lastWasteCategory;
+  doc["servoActive"] = lastActiveServo;
   doc["mq2Ready"]   = mq2WarmupDone;
   doc["motorState"] = motorState;
   doc["motorSpeed"] = motorSpeed;
