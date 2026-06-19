@@ -20,15 +20,17 @@ import json
 import time
 import threading
 import os
+import urllib.request
+import urllib.parse
 from collections import deque
 from datetime import datetime
 
 # ─── Konfigurasi IP ──────────────────────────────────────────────────────────
-CAM_IP       = "192.168.8.136"
+CAM_IP       = "192.168.4.2"
 CAM_TCP_PORT = 80
 CAM_WS_PORT  = 81
 
-SMART_IP      = "192.168.8.199"
+SMART_IP      = "192.168.4.3"
 SMART_WS_PORT = 81
 
 # ─── Path ─────────────────────────────────────────────────────────────────────
@@ -60,6 +62,11 @@ WASTE_INFO = {
         "warna":    (0, 165, 255),      # Oranye
         "aksi":     "Kantong KUNING",
     },
+    "Kain Kasa": {
+        "kategori": "Limbah Non-Infeksius",
+        "warna":    (0, 200, 0),        # Hijau
+        "aksi":     "Kantong HITAM",
+    },
     "Kain kasa": {
         "kategori": "Limbah Non-Infeksius",
         "warna":    (0, 200, 0),        # Hijau
@@ -71,6 +78,22 @@ WASTE_INFO = {
         "aksi":     "Kantong HITAM",
     },
 }
+
+def get_waste_info(name):
+    """Lookup WASTE_INFO dengan fallback case-insensitive."""
+    # Hilangkan underscore (seperti "Kain_kasa" -> "Kain kasa") agar bisa dicocokkan
+    name_clean = name.replace("_", " ")
+    if name_clean in WASTE_INFO:
+        return WASTE_INFO[name_clean]
+    name_lower = name_clean.lower()
+    for key, val in WASTE_INFO.items():
+        if key.lower() == name_lower:
+            return val
+    return {
+        "kategori": "Tidak Dikenal",
+        "warna":    (128, 128, 128),
+        "aksi":     "-",
+    }
 
 # ─── Antrian frame ────────────────────────────────────────────────────────────
 frame_queue = deque(maxlen=2)
@@ -223,11 +246,7 @@ def draw_classification_overlay(frame, name, conf):
         )
         return frame
 
-    info  = WASTE_INFO.get(name, {
-        "kategori": "Tidak Dikenal",
-        "warna":    (128, 128, 128),
-        "aksi":     "-",
-    })
+    info  = get_waste_info(name)
     color = info["warna"]
 
     # ── Banner bawah: nama objek + confidence ──
@@ -264,11 +283,7 @@ def draw_yolo_overlay(frame, detections, cls_name, cls_conf):
             conf = det["conf"]
             x1, y1, x2, y2 = det["box"]
 
-            info = WASTE_INFO.get(name, {
-                "kategori": "Tidak Dikenal",
-                "warna": (128, 128, 128),
-                "aksi": "-"
-            })
+            info = get_waste_info(name)
             color = info["warna"]
 
             # Gambar Bounding Box
@@ -326,26 +341,41 @@ def main():
             print("[CAM] TCP OK.")
 
             cam_ws = websocket.WebSocket()
-            cam_ws.connect(f"ws://{CAM_IP}:{CAM_WS_PORT}")
-            print("[CAM] WS senter OK.")
+            cam_ws.settimeout(3)
+            try:
+                cam_ws.connect(f"ws://{CAM_IP}:{CAM_WS_PORT}")
+                print("[CAM] WS senter OK.")
+            except Exception as e:
+                print(f"[CAM] WS senter gagal: {e}")
 
-            sf_ws = websocket.WebSocket()
-            sf_ws.connect(f"ws://{SMART_IP}:{SMART_WS_PORT}")
-            print("[SF] WS OK.")
-
+            print(f"[SF] Smart Bin target HTTP: http://{SMART_IP}/api")
+            
             def send_flash(state):
                 try:
-                    if cam_ws.sock and cam_ws.sock.connected:
-                        cam_ws.send(json.dumps({"cmd": "flash", "state": 1 if state else 0}))
+                    cam_ws.send(json.dumps({"cmd": "flash", "state": 1 if state else 0}))
                 except Exception:
                     pass
 
             def send_sf(cmd_dict):
-                try:
-                    if sf_ws.sock and sf_ws.sock.connected:
-                        sf_ws.send(json.dumps(cmd_dict))
-                except Exception:
-                    pass
+                """Kirim perintah ke Smart Bin secara HTTP GET (Anti-Drop/Teknik Drone)."""
+                def _do_send():
+                    try:
+                        # Convert dict ke parameter URL
+                        # Contoh: {"cmd": "servo", "id": 1, "angle": 90} -> cmd=servo&id=1&angle=90
+                        query = urllib.parse.urlencode(cmd_dict)
+                        url = f"http://{SMART_IP}/api?{query}"
+                        print(f"[SF] HTTP GET: {url}")
+                        
+                        # Timeout sangat singkat agar respons cepat, tidak perlu koneksi persistent
+                        req = urllib.request.urlopen(url, timeout=2.0)
+                        resp = req.read()
+                        req.close()
+                        print(f"[SF] Berhasil!")
+                    except Exception as e:
+                        print(f"[SF] GAGAL HTTP: {e}")
+                
+                # Kirim pakai thread fire-and-forget agar kamera sama sekali tidak nge-lag
+                threading.Thread(target=_do_send, daemon=True).start()
 
             send_flash(True)
             print("[CAM] Senter ON.")
@@ -364,6 +394,10 @@ def main():
             last_cls_name   = None   # hasil YOLO classification
             last_cls_conf   = 0.0
             last_detections = []     # hasil YOLO detection
+            
+            last_active_servo = None
+            servo_hold_time   = 0.0
+            SERVO_HOLD_DELAY  = 3.0
 
             while recv_t.is_alive():
                 if not frame_queue:
@@ -387,14 +421,14 @@ def main():
                     face_col = (0, 220, 220)
                     if not face_active:
                         send_sf({"cmd": "machine", "on": True})
-                        send_sf({"cmd": "servo", "id": 1, "angle": 90})
+                        # send_sf({"cmd": "servo", "id": 1, "angle": 90}) # Dihapus agar tidak konflik dengan servo pemilah
                         face_active = True
                 else:
                     face_txt = "TIDAK ADA WAJAH"
                     face_col = (0, 0, 200)
                     if face_active:
                         send_sf({"cmd": "machine", "on": False})
-                        send_sf({"cmd": "servo", "id": 1, "angle": 0})
+                        # send_sf({"cmd": "servo", "id": 1, "angle": 0})
                         face_active = False
 
                 # ── YOLO inference (di-throttle) ─────────────────────
@@ -402,6 +436,48 @@ def main():
                 if yolo_model and (now - last_yolo_time) >= YOLO_INTERVAL:
                     last_detections, last_cls_name, last_cls_conf = run_yolo_inference(yolo_model, frame)
                     last_yolo_time = now
+
+                    # ── Kontrol Servo Berdasarkan Kategori Limbah ──
+                    detected_category = None
+                    if last_detections:
+                        obj_name = last_detections[0]["name"]
+                        detected_category = get_waste_info(obj_name).get("kategori")
+                        print(f"[YOLO] Deteksi objek: '{obj_name}' -> Kategori: '{detected_category}'")
+                    elif last_cls_name:
+                        detected_category = get_waste_info(last_cls_name).get("kategori")
+                        print(f"[YOLO] Klasifikasi: '{last_cls_name}' -> Kategori: '{detected_category}'")
+
+                    target_servo = None
+                    if detected_category == "Limbah Infeksius":
+                        target_servo = 1
+                    elif detected_category == "Limbah Non-Infeksius":
+                        target_servo = 2
+                    elif detected_category == "Limbah B3":
+                        target_servo = 3
+                        
+                    if target_servo is not None:
+                        # Set timer untuk menahan servo terbuka
+                        servo_hold_time = now + SERVO_HOLD_DELAY
+                        
+                        if target_servo != last_active_servo:
+                            # Kembalikan servo sebelumnya ke 0 derajat
+                            if last_active_servo is not None:
+                                send_sf({"cmd": "servo", "id": last_active_servo, "angle": 0})
+                                print(f"[SERVO] Servo {last_active_servo} ditutup.")
+                            
+                            # Menentukan nama objek yang terdeteksi
+                            detected_name = obj_name if last_detections else last_cls_name
+                            
+                            # Buka servo target ke 90 derajat & sertakan nama objek serta kategori ke web dashboard
+                            send_sf({"cmd": "servo", "id": target_servo, "angle": 90, "waste": detected_name, "cat": detected_category})
+                            print(f"[SERVO] Kategori '{detected_category}' terdeteksi -> Servo {target_servo} dibuka.")
+                            last_active_servo = target_servo
+                    else:
+                        # Jika tidak ada yang terdeteksi, tutup setelah delay habis
+                        if last_active_servo is not None and now > servo_hold_time:
+                            send_sf({"cmd": "servo", "id": last_active_servo, "angle": 0, "waste": "Tidak Ada", "cat": "-"})
+                            print(f"[SERVO] Tidak ada deteksi selama {SERVO_HOLD_DELAY}s -> Servo {last_active_servo} ditutup.")
+                            last_active_servo = None
 
                 # ── Gambar overlay ───────────────────────────────────
                 if yolo_model:
@@ -442,7 +518,9 @@ def main():
                     cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1
                 )
 
-                cv2.imshow("Deteksi Limbah Medis", frame)
+                # ── Perbesar tampilan (2× dari resolusi asli kamera 320x240) ──
+                display_frame = cv2.resize(frame, (640, 480), interpolation=cv2.INTER_LINEAR)
+                cv2.imshow("Deteksi Limbah Medis", display_frame)
 
                 key = cv2.waitKey(1) & 0xFF
 
@@ -468,14 +546,15 @@ def main():
         finally:
             stop_event.set()
             try:
-                if cam_ws and cam_ws.sock and cam_ws.sock.connected:
+                if cam_ws:
                     cam_ws.send(json.dumps({"cmd": "flash", "state": 0}))
                     print("[CAM] Senter OFF.")
             except Exception:
                 pass
             if cam_sock: cam_sock.close()
-            if cam_ws:   cam_ws.close()
-            if sf_ws:    sf_ws.close()
+            if cam_ws:
+                try: cam_ws.close()
+                except Exception: pass
             if recv_t and recv_t.is_alive():
                 recv_t.join(timeout=2)
 
