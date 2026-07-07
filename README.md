@@ -14,91 +14,92 @@
 
 ---
 
+## 📖 Daftar Isi
+- [Deskripsi Proyek](#-deskripsi-proyek)
+- [Fitur Utama](#-fitur-utama)
+- [Peta Pin ESP32](#-peta-pin-esp32)
+- [Struktur Proyek](#-struktur-proyek)
+- [Dependensi & Library](#-dependensi--library)
+- [Panduan Penggunaan](#-panduan-penggunaan)
+- [Cara Melatih Model AI](#-cara-melatih-model-ai-sendiri)
+- [Arsitektur Sistem](#-arsitektur-sistem)
+
+---
+
 ## 📌 Deskripsi Proyek
 
 Proyek ini adalah purwarupa (prototipe) **Sistem Pemilah Limbah Medis Otomatis** yang mengintegrasikan *Computer Vision* berbasis AI dengan mikrokontroler ESP32. Sistem dirancang untuk mendeteksi berbagai jenis limbah medis secara *real-time* menggunakan kamera dan model YOLOv8, lalu secara otomatis memisahkannya ke dalam kategori yang tepat:
 
 | Kategori | Tempat | Warna Kantong |
-|---|---|---|
-| 🟡 Limbah Infeksius | Gerbang Servo 1 | Kantong **KUNING** |
-| ⚫ Limbah Non-Infeksius | Gerbang Servo 2 | Kantong **HITAM** |
-| 🔴 Limbah B3 (Berbahaya) | Gerbang Servo 3 | Kantong **MERAH** |
+|:---:|:---:|:---:|
+| 🟡 **Limbah Infeksius** | Gerbang Servo 1 | Kantong **KUNING** |
+| ⚫ **Limbah Non-Infeksius** | Gerbang Servo 2 | Kantong **HITAM** |
+| 🔴 **Limbah B3 (Berbahaya)** | Gerbang Servo 3 | Kantong **MERAH** |
 
-Sistem juga dilengkapi sensor keamanan untuk mencegah risiko bahaya di area pembuangan limbah.
+Sistem juga dilengkapi dengan serangkaian sensor keselamatan dan peringatan dini untuk mencegah risiko bahaya di area pembuangan limbah, menjadikannya sistem yang **responsif**, **cerdas**, dan **aman**.
 
 ---
 
 ## ✨ Fitur Utama
 
 ### 🤖 AI Computer Vision
-- **YOLOv8** untuk deteksi & klasifikasi limbah medis secara *real-time*
-- **Face Detection (Haarcascade)**: *Conveyor* menyala otomatis saat operator terdeteksi di depan mesin, dan berhenti saat operator pergi
-- Mendukung model **Object Detection** maupun **Classification**
-- Throttle inferensi untuk menjaga performa kamera tetap mulus
+- **YOLOv8**: Deteksi dan klasifikasi limbah medis secara *real-time*.
+- **Kinerja Optimal**: Dilengkapi fitur *throttling* inferensi dan thread asinkron untuk menjaga performa kamera tetap mulus tanpa *lag*.
+- **Fleksibel**: Mendukung penggunaan model **Object Detection** maupun **Classification**.
+- **Face Detection (Haarcascade)**: *Conveyor* menyala otomatis saat operator terdeteksi dan berhenti saat operator pergi.
 
 ### ⚙️ Sistem Pemilahan Otomatis
-- **Motor DC + L298N Driver**: Penggerak sabuk *conveyor*
-- **3x Motor Servo**: Membuka gerbang pemilah ke jalur yang sesuai
-- Logika *hold-and-release* — servo terbuka selama 3 detik setelah objek terdeteksi
-- Kendali motor dari web panel dengan slider kecepatan (0–255 / PWM)
+- **Motor DC + L298N Driver**: Penggerak utama sabuk *conveyor*.
+- **3x Motor Servo**: Membuka gerbang pemilah ke jalur penampungan yang sesuai dengan kategori limbah.
+- **Logika *Hold-and-Release***: Servo akan terbuka dengan jeda waktu yang telah disesuaikan (berdasarkan jarak titik jatuh), kemudian tertutup otomatis.
+- **Kendali Motor**: Mendukung pengaturan kecepatan PWM (0–255) langsung dari Web Dashboard.
 
 ### 🚨 Sensor Keselamatan & Peringatan Dini
-| Sensor | Pin | Fungsi |
+| Sensor | Pin ESP32 | Fungsi |
 |---|---|---|
-| MQ-2 Gas/Asap | GPIO 26 (Analog) | Deteksi kebocoran gas / asap |
-| Flame Sensor | GPIO 34 (Analog), GPIO 13 (Digital) | Deteksi api |
-| Water Level | GPIO 14 (Analog) | Deteksi luapan cairan |
+| **MQ-2** | `GPIO 26` (Analog) | Deteksi kebocoran gas beracun atau asap |
+| **Flame Sensor** | `GPIO 34` (Analog), `GPIO 13` (Digital) | Deteksi titik api |
+| **Water Level** | `GPIO 14` (Analog) | Deteksi luapan cairan atau banjir |
 
-**Fail-Safe Mechanism:**
-- Motor *conveyor* berhenti otomatis saat bahaya terdeteksi
-- **Passive Buzzer** berbunyi dengan frekuensi 2kHz (nyaring!)
-- **RGB LED** berkedip dengan warna berbeda tiap jenis bahaya
-- Tampilan LCD 16x2 menampilkan notifikasi bahaya
+**Sistem *Fail-Safe*:**
+- Motor *conveyor* **berhenti seketika** saat terdeteksi bahaya.
+- **Passive Buzzer** berbunyi nyaring (frekuensi 2kHz) sebagai alarm.
+- **RGB LED** berkedip memberikan indikator visual bahaya (warna disesuaikan dengan jenis peringatan).
+- Layar **LCD I2C 16x2** menampilkan teks notifikasi secara *real-time*.
 
 ### 🌐 Web Dashboard Control Panel
-Antarmuka web modern diakses langsung via browser — tidak perlu instal aplikasi apapun.
+Antarmuka web yang modern, responsif, dan kaya fitur. Dapat diakses langsung via browser tanpa perlu instalasi aplikasi tambahan.
 
-**Mode User (Tanpa Password):**
-- Tampilan *Live View* status sistem
-- Status sensor gas, air, api, dan motor secara real-time
-
-**Mode Admin (`Admin` / `Admin123`):**
-- Kontrol penuh Motor DC (Maju / Mundur / Stop + Speed Slider)
-- Kontrol manual semua Servo (0°–180°)
-- Monitoring ADC sensor secara detail
-- **Hardware Diagnostics (Test Mode):** Tes semua *hardware* langsung dari web:
-  - 🎯 Simulasi Deteksi YOLO
-  - 🔊 Test Buzzer (1 detik)
-  - ⚙️ Test Motor Driver (urutan otomatis: Maju → Stop → Mundur)
-  - 💨 Test Sensor Gas / Air / Api
+- **Mode Pengguna (Guest)**: Tampilan *Live View* untuk memonitor status sistem dan sensor.
+- **Mode Admin (`Admin` / `Admin123`)**:
+  - Kontrol manual Motor DC (Maju, Mundur, Stop, Slider Kecepatan).
+  - Kontrol manual tiap Servo (0°–180°).
+  - Monitoring metrik ADC dari tiap sensor secara presisi.
+  - **Hardware Diagnostics (Test Mode)**: Memungkinkan pengujian setiap komponen *hardware* langsung melalui antarmuka web.
 
 ---
 
 ## 🗺️ Peta Pin ESP32
 
-```
-┌─────────────────────┬──────────┬─────────────────────────┐
-│ Komponen            │ Pin ESP32│ Catatan                 │
-├─────────────────────┼──────────┼─────────────────────────┤
-│ LCD I2C SDA         │ 21       │                         │
-│ LCD I2C SCL         │ 22       │                         │
-│ Passive Buzzer      │ 32       │ tone() / noTone()       │
-│ Push Button         │  5       │ INPUT_PULLUP            │
-│ Servo 1 (Infeksius) │ 33       │ 50Hz PWM                │
-│ Servo 2 (Non-Inf.)  │ 19       │ 50Hz PWM                │
-│ Servo 3 (B3)        │ 18       │ 50Hz PWM                │
-│ MQ-2 AOUT           │ 26       │ Analog                  │
-│ Water Level AOUT    │ 14       │ Analog (ADC1_CH6)       │
-│ Flame Sensor AOUT   │ 34       │ Analog                  │
-│ Flame Sensor DOUT   │ 13       │ Digital                 │
-│ RGB LED - Red       │ 15       │ PWM (ledcAttach)        │
-│ RGB LED - Green     │  2       │ PWM (ledcAttach)        │
-│ RGB LED - Blue      │ 23       │ PWM (ledcAttach)        │
-│ L298N IN1           │  4       │ Arah motor              │
-│ L298N IN2           │ 17       │ Arah motor              │
-│ L298N ENA           │ 16       │ PWM kecepatan           │
-└─────────────────────┴──────────┴─────────────────────────┘
-```
+| Komponen | Pin ESP32 | Keterangan Tambahan |
+|---|:---:|---|
+| **LCD I2C SDA** | `21` | Komunikasi I2C |
+| **LCD I2C SCL** | `22` | Komunikasi I2C |
+| **Passive Buzzer** | `32` | `tone()` / `noTone()` |
+| **Push Button** | `5` | `INPUT_PULLUP` |
+| **Servo 1 (Infeksius)** | `33` | 50Hz PWM |
+| **Servo 2 (Non-Inf.)** | `19` | 50Hz PWM |
+| **Servo 3 (B3)** | `18` | 50Hz PWM |
+| **MQ-2 (Gas) AOUT** | `26` | Analog |
+| **Water Level AOUT** | `14` | Analog (ADC1_CH6) |
+| **Flame AOUT** | `34` | Analog |
+| **Flame DOUT** | `13` | Digital |
+| **RGB LED - Red** | `15` | PWM (`ledcAttach`) |
+| **RGB LED - Green** | `2` | PWM (`ledcAttach`) |
+| **RGB LED - Blue** | `23` | PWM (`ledcAttach`) |
+| **L298N IN1** | `4` | Arah motor |
+| **L298N IN2** | `17` | Arah motor |
+| **L298N ENA** | `16` | PWM kecepatan |
 
 ---
 
@@ -107,137 +108,156 @@ Antarmuka web modern diakses langsung via browser — tidak perlu instal aplikas
 ```text
 📦 Code and all/
  ┣ 📂 Python/
- ┃ ┣ 📜 main_yolo.py          ← Script utama: streaming kamera + inferensi YOLO + kirim perintah ke ESP32
- ┃ ┣ 📜 train_yolo.py         ← Script untuk melatih model YOLOv8 kustom
- ┃ ┣ 📜 label_manual.py       ← Tool untuk labeling data manual
+ ┃ ┣ 📜 main_yolo.py         ← Script utama (Streaming kamera, Inferensi AI, Komunikasi ESP32)
+ ┃ ┣ 📜 train_yolo.py        ← Script untuk melatih model YOLOv8 kustom
+ ┃ ┣ 📜 label_manual.py      ← Tool untuk labeling data manual
  ┃ ┗ 📂 waste_model/
  ┃    ┗ 📂 weights/
- ┃       ┗ 📜 best.pt         ← Bobot model AI hasil training (tidak di-commit ke Git)
+ ┃       ┗ 📜 best.pt        ← Bobot AI hasil training (ignore-git)
  ┣ 📂 Esp32/
- ┃ ┗ 📜 Esp32.ino             ← Firmware ESP32 utama (Web Server, WebSocket, Sensor, Motor, Servo)
+ ┃ ┗ 📜 Esp32.ino            ← Firmware utama ESP32 (Web Server, WebSockets, Sensor, Hardware)
  ┣ 📂 Backup/
- ┃ ┣ 📜 Esp32_BACKUP.ino      ← Backup firmware ESP32
+ ┃ ┣ 📜 Esp32_BACKUP.ino     ← Firmware cadangan ESP32
  ┃ ┗ 📜 Esp32CAM_BACKUP.ino  ← Firmware ESP32-CAM (TCP streaming video)
- ┗ 📜 README.md               ← Dokumentasi ini
+ ┗ 📜 README.md              ← Dokumentasi Repositori
 ```
 
 ---
 
 ## ⚙️ Dependensi & Library
 
-### Arduino / ESP32 (Arduino IDE)
-| Library | Keterangan |
+### 🔧 Arduino / ESP32 (Arduino IDE)
+Pastikan menggunakan board manager **esp32 by Espressif Systems** (direkomendasikan v3.x).
+
+| Library | Kegunaan |
 |---|---|
-| `ESP32Servo` | Kontrol servo pada ESP32 |
-| `WebSocketsServer` (by Markus Sattler) | Server WebSocket untuk komunikasi real-time |
-| `ArduinoJson` | Parsing & serialisasi data JSON |
-| `LiquidCrystal_I2C` | Kontrol LCD I2C 16x2 |
-| `WiFi`, `WebServer` | Built-in library Arduino ESP32 |
+| `ESP32Servo` | Mengontrol sinyal PWM untuk servo |
+| `WebSocketsServer` | *(by Markus Sattler)* Menjalankan server WebSocket *real-time* |
+| `ArduinoJson` | Parsing dan penyusunan struktur data JSON |
+| `LiquidCrystal_I2C` | Pengendali layar LCD 16x2 berbasis I2C |
+| `WiFi`, `WebServer` | Library bawaan untuk konektivitas jaringan & web server |
 
-> **Board:** `esp32` by Espressif Systems (v3.x direkomendasikan)
-
-### Python
+### 🐍 Python
+Install dependensi Python melalui terminal:
 ```bash
 pip install ultralytics opencv-python websocket-client numpy
 ```
-| Library | Versi | Keterangan |
-|---|---|---|
-| `ultralytics` | ≥8.0 | Framework YOLOv8 |
-| `opencv-python` | ≥4.5 | Pemrosesan gambar & video |
-| `websocket-client` | ≥1.0 | Komunikasi WebSocket ke ESP32-CAM |
-| `numpy` | ≥1.21 | Manipulasi array gambar |
 
 ---
 
 ## 🚀 Panduan Penggunaan
 
-### Langkah 1: Setup ESP32 & ESP32-CAM
-1. Install **Arduino IDE** dan tambahkan board ESP32 (URL: `https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`).
-2. Install semua library yang dibutuhkan dari Library Manager.
-3. Buka `Esp32/Esp32.ino`, ubah nilai berikut:
+### Langkah 1: Persiapan ESP32 & ESP32-CAM
+1. Tambahkan konfigurasi board ESP32 di **Arduino IDE** (`https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`).
+2. Install daftar library yang telah disebutkan di atas via **Library Manager**.
+3. Buka `Esp32/Esp32.ino` dan atur SSID serta kata sandi WiFi Anda:
    ```cpp
    #define WIFI_SSID   "NamaWiFiAnda"
    #define WIFI_PASS   "PasswordWiFiAnda"
    ```
-4. *Upload* firmware ke ESP32. Catat **IP Address** yang muncul di Serial Monitor.
-5. *Upload* firmware kamera (`Esp32CAM_BACKUP.ino`) ke ESP32-CAM.
+4. *Upload* program ke ESP32. Buka Serial Monitor (baud rate 115200) dan catat **IP Address** yang didapatkan.
+5. Lakukan hal yang sama untuk mem-flash `Esp32CAM_BACKUP.ino` ke module ESP32-CAM Anda.
 
-### Langkah 2: Sesuaikan IP di Script Python
-Buka `Python/main_yolo.py` dan sesuaikan:
+### Langkah 2: Sesuaikan IP pada Script Python
+Buka file `Python/main_yolo.py` menggunakan teks editor pilihan Anda (mis. VS Code), lalu ubah variabel IP agar sesuai dengan IP Address yang didapatkan sebelumnya:
 ```python
-CAM_IP       = "192.168.x.x"   # IP Address ESP32-CAM
-SMART_IP     = "192.168.x.x"   # IP Address ESP32 Utama
+CAM_IP       = "192.168.x.x"   # IP Address modul ESP32-CAM
+SMART_IP     = "192.168.x.x"   # IP Address modul ESP32 Utama
 ```
 
-### Langkah 3: Jalankan Program
+### Langkah 3: Menjalankan Sistem Utama
+Jalankan script Python melalui terminal:
 ```bash
 cd "Python"
 python main_yolo.py
 ```
 
-**Kontrol Keyboard:**
-| Key | Fungsi |
-|---|---|
-| `S` | Screenshot manual frame saat ini |
-| `A` | Toggle mode Auto-Capture untuk mengumpulkan dataset |
-| `Q` | Keluar dari program |
+**Daftar Kontrol Keyboard (Saat Window Kamera Aktif):**
+| Tombol | Fungsi |
+|:---:|---|
+| `S` | Menyimpan *screenshot* manual frame saat ini |
+| `A` | Menyalakan/mematikan (*toggle*) fitur Auto-Capture (berguna untuk panen dataset) |
+| `F` | Menyalakan/mematikan lampu Flash (senter) pada modul ESP32-CAM |
+| `Q` | Menghentikan program dengan aman (*Quit*) |
 
-### Langkah 4: Akses Web Dashboard
-Buka browser dan masuk ke: **`http://<IP-ESP32>/`**
+### Langkah 4: Mengakses Web Dashboard
+Buka browser (disarankan Chrome atau Firefox) dan masuk ke: **`http://<IP-ESP32>/`**
 
-- **Login User**: Klik "Masuk sebagai Pengguna"
-- **Login Admin**: Tab Admin → Username: `Admin` | Password: `Admin123`
+- **Guest Login**: Klik opsi "Masuk sebagai Pengguna" (Tidak butuh password).
+- **Admin Login**: Masuk ke Tab Admin, lalu ketikkan kredensial di bawah ini:
+  - **Username:** `Admin`
+  - **Password:** `Admin123`
 
 ---
 
 ## 🎓 Cara Melatih Model AI Sendiri
 
-1. Kumpulkan gambar sampel limbah menggunakan mode **Auto-Capture** (`A` key) di `main_yolo.py`.
-2. Label gambar menggunakan `label_manual.py` atau tools seperti **Roboflow**.
-3. Latih model:
+Ingin menambahkan jenis sampah medis baru atau memperbaiki akurasi deteksi? Anda dapat melatih model YOLO Anda sendiri:
+
+1. Kumpulkan sampel gambar menggunakan mode **Auto-Capture** (tekan tombol `A`) yang sudah tersedia pada `main_yolo.py`.
+2. Label dataset gambar yang sudah terkumpul menggunakan script bawaan `label_manual.py` atau gunakan platform seperti [Roboflow](https://roboflow.com/).
+3. Lakukan proses pelatihan (training) menggunakan script berikut:
    ```bash
    python train_yolo.py
    ```
-4. Bobot model terbaik akan tersimpan di `waste_model/weights/best.pt`.
+4. Setelah selesai, model terbaik secara otomatis akan tersimpan di dalam direktori `waste_model/weights/best.pt` dan siap digunakan.
 
 ---
 
 ## 📡 Arsitektur Sistem
 
-```
-┌─────────────┐    TCP Streaming    ┌──────────────┐
-│  ESP32-CAM  │ ─────────────────► │  Laptop PC   │
-│  (Kamera)   │                    │  main_yolo.py│
-└─────────────┘                    │  YOLOv8 AI   │
-                                   └──────┬───────┘
-                                          │ HTTP GET /api
-                                          │ (cmd=servo, cmd=machine)
-                                          ▼
-┌─────────────────────────────────────────────────────┐
-│               ESP32 Utama (Main Controller)          │
-│  ┌──────────┐  ┌───────────┐  ┌─────────────────┐  │
-│  │ 3x Servo │  │ Motor DC  │  │  Sensor Suite   │  │
-│  │(Pemilah) │  │(Conveyor) │  │ MQ2, Flame, Air │  │
-│  └──────────┘  └───────────┘  └─────────────────┘  │
-│  ┌──────────┐  ┌───────────┐  ┌─────────────────┐  │
-│  │ LCD 16x2 │  │ RGB LED   │  │ Passive Buzzer  │  │
-│  └──────────┘  └───────────┘  └─────────────────┘  │
-│                      ▲                              │
-│               WebSocket (Port 81)                   │
-│                      │                              │
-│              ┌───────────────┐                      │
-│              │  Web Browser  │                      │
-│              │  (Dashboard)  │                      │
-│              └───────────────┘                      │
-└─────────────────────────────────────────────────────┘
+Berikut adalah alur data dan interaksi antar perangkat dalam keseluruhan sistem:
+
+```mermaid
+graph TD
+    subgraph K[Hardware Modul Kamera]
+        CAM[ESP32-CAM]
+    end
+
+    subgraph P[Sistem AI & Pengolahan Data]
+        PC[Laptop / PC]
+        YOLO(YOLOv8 AI)
+        SCRIPT(main_yolo.py)
+    end
+
+    subgraph E[Sistem Kontrol & Aktuator]
+        ESP[ESP32 Utama]
+        SERVO[3x Motor Servo]
+        MOTOR[Motor DC Conveyor]
+        SENSORS[Sensor MQ2, Api, Air]
+        ALERTS[Buzzer & RGB LED & LCD]
+    end
+
+    subgraph W[User Interface]
+        WEB[Web Dashboard]
+    end
+
+    %% Koneksi Kamera ke PC
+    CAM -- "TCP Video Stream" --> SCRIPT
+    SCRIPT -- "WebSocket (Flash Control)" --> CAM
+    
+    %% Internal PC
+    SCRIPT <--> YOLO
+    
+    %% PC ke ESP32 Utama
+    SCRIPT -- "HTTP GET /api (Deteksi & Klasifikasi)" --> ESP
+    
+    %% Internal ESP32
+    ESP --> SERVO
+    ESP --> MOTOR
+    SENSORS --> ESP
+    ESP --> ALERTS
+    
+    %% ESP32 ke Web
+    ESP <-->|WebSocket Port 81| WEB
 ```
 
 ---
 
 ## 🤝 Kontribusi
 
-Proyek ini dikembangkan untuk kebutuhan kompetisi **CNC HIMTIKA**. Silakan lakukan *fork* dan modifikasi sesuai kebutuhan!
+Proyek ini dikembangkan khusus untuk kebutuhan inovasi lomba dan kompetisi teknologi **CNC HIMTIKA**. Kami mengundang siapa pun untuk melakukan *fork* pada repositori ini dan menambahkan inovasinya sendiri. Jangan ragu untuk membuat *Pull Request* atau membuka *Issue* jika Anda menemukan *bug*!
 
 ---
 
-> *Proyek ini dibangun untuk mengatasi permasalahan penyortiran limbah medis secara manual yang berisiko tinggi bagi petugas kebersihan, dengan memberikan sistem nirsentuh cerdas yang responsif.*
+> *"Proyek ini dibangun sebagai dedikasi untuk memecahkan permasalahan risiko penyortiran limbah medis manual yang berbahaya bagi para petugas medis dan petugas kebersihan, dengan merancang sistem cerdas nirsentuh yang andal, responsif, dan aman."*
