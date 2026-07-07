@@ -258,16 +258,32 @@
 
   .preset-row { display: flex; gap: 6px; margin: 10px 0; }
   .preset-btn { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: var(--muted); font-size: 11px; padding: 6px 4px; cursor: pointer; text-align: center; transition: all 0.15s; font-family: monospace; line-height: 1.4; }
-  .preset-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,217,255,0.05); }
-  .preset-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,217,255,0.1); }
-
-  .motor-btns { display: flex; gap: 10px; }
   .motor-btn { flex: 1; padding: 13px 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.15s; letter-spacing: 0.04em; text-transform: uppercase; }
   .motor-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,217,255,0.05); }
   .motor-btn.active-fwd { border-color: var(--ok); color: var(--ok); background: rgba(63,185,80,0.08); }
   .motor-btn.active-bwd { border-color: var(--accent2); color: var(--accent2); background: rgba(255,112,67,0.08); }
   .motor-btn.stop-btn { border-color: var(--danger); color: var(--danger); }
   .motor-btn.stop-btn:hover { background: rgba(248,81,73,0.08); }
+
+  /* START BUTTON */
+  .start-btn {
+    width: 100%; padding: 14px; border-radius: var(--radius);
+    background: linear-gradient(135deg, #00d9ff 0%, #00b8d9 100%);
+    color: #000; font-size: 15px; font-weight: 700; border: none;
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.04em;
+    text-transform: uppercase; margin-top: 14px;
+    box-shadow: 0 4px 20px rgba(0,217,255,0.3);
+  }
+  .start-btn:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,217,255,0.45); }
+  .start-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .start-banner {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(0,217,255,0.06); border: 1px solid rgba(0,217,255,0.25);
+    border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 12px; color: var(--muted);
+  }
+  .start-banner.running {
+    background: rgba(63,185,80,0.06); border-color: rgba(63,185,80,0.3); color: var(--ok);
+  }
 
   /* SERVO CARDS */
   .servo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: border-color 0.2s; }
@@ -411,6 +427,54 @@
 
   <!-- ═══ ADMIN: FULL PANEL ═══ -->
   <div class="admin-only" id="adminView">
+
+    <!-- MODE OPERASI & KEAMANAN -->
+    <div class="section-label">Mode Operasi &amp; Keamanan</div>
+    <div class="card" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 250px;">
+          <div class="card-label">Mode Konveyor</div>
+          <select id="modeSelect" onchange="sendMode()" class="form-input" style="width: 100%; max-width: 300px; cursor: pointer;">
+            <option value="0">Keep Going (Motor selalu menyala)</option>
+            <option value="1">Less Energy (Hemat energi, nyala saat ada objek)</option>
+          </select>
+          <button id="startBtn" class="start-btn" onclick="sendStart()">▶ START SISTEM</button>
+          <div id="startBanner" class="start-banner">
+            <span>⏸</span>
+            <span>Pilih mode lalu tekan <strong>START SISTEM</strong> untuk mulai.</span>
+          </div>
+        </div>
+        <div id="safetyLockoutUI" style="display: none; flex: 1; min-width: 250px; background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.4); padding: 12px; border-radius: var(--radius); animation: pulse-border 1.5s infinite;">
+          <div style="color: var(--danger); font-weight: 600; font-size: 13px; margin-bottom: 6px;">⚠ SISTEM TERKUNCI (SAFETY LOCKOUT)</div>
+          <div style="color: var(--muted); font-size: 12px; margin-bottom: 10px;">Motor ditahan karena sensor sempat mendeteksi bahaya. Pastikan fisik aman sebelum melanjutkan.</div>
+          <button onclick="sendResume()" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--ok); color: #000; font-weight: 600; border: none; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">⟳ Nyalakan Kembali</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SENTER KAMERA -->
+    <div class="section-label">Senter Kamera (ESP32-CAM)</div>
+    <div class="card" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+          <div class="card-label">Status Senter</div>
+          <div id="flashStatusText" style="font-size: 26px; font-weight: 700; color: var(--muted); margin: 8px 0;">OFF</div>
+          <div style="font-size: 12px; color: var(--muted);">Kontrol via tombol di bawah atau tekan <code style="color:var(--accent);">F</code> di Python</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 180px;">
+          <button id="flashOnBtn" onclick="sendFlash(1)" style="padding: 11px 20px; border-radius: var(--radius); background: rgba(255,220,0,0.15); border: 1px solid rgba(255,220,0,0.4); color: #ffd700; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">💡 Nyalakan Senter</button>
+          <button id="flashOffBtn" onclick="sendFlash(0)" style="padding: 11px 20px; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--border); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">🔦 Matikan Senter</button>
+        </div>
+        <div style="flex: 1; min-width: 200px;">
+          <div class="card-label">IP ESP32-CAM</div>
+          <div style="display: flex; gap: 8px;">
+            <input id="camIpInput" class="form-input" type="text" value="192.168.4.4" placeholder="192.168.4.4" style="max-width: 140px;" />
+            <button onclick="connectCamWs()" style="padding: 0 12px; border-radius: var(--radius); background: var(--border); border: none; color: #fff; cursor: pointer; font-size: 12px;">Connect</button>
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 6px;" id="camWsStatusText">WebSocket: <span style="color:var(--danger)">Disconnected</span></div>
+        </div>
+      </div>
+    </div>
 
     <!-- SENSORS -->
     <div class="section-label">Status Sensor</div>
@@ -665,6 +729,117 @@ function doLogout() {
 }
 
 // ═══════════════════════════════════════
+//  MODE & SAFETY
+// ═══════════════════════════════════════
+function sendMode() {
+  const m = parseInt(document.getElementById('modeSelect').value);
+  send({ cmd: 'set_mode', mode: m });
+  const modeNames = { 0: 'Keep Going', 1: 'Less Energy' };
+  showToast('Mode: ' + (modeNames[m] || m) + '. Tekan START untuk mulai.');
+}
+
+function sendStart() {
+  const startBtn = document.getElementById('startBtn');
+  if (startBtn && startBtn.textContent.includes('STOP')) {
+    // Jika sudah running, tombol jadi STOP — kirim set_mode ulang untuk reset
+    const m = parseInt(document.getElementById('modeSelect').value);
+    send({ cmd: 'set_mode', mode: m });
+    showToast('Sistem dihentikan. Tekan START untuk memulai ulang.');
+  } else {
+    send({ cmd: 'start_system' });
+    showToast('Sistem di-START!');
+  }
+}
+
+function sendResume() {
+  send({ cmd: 'resume' });
+  showToast('Safety Lockout direset. Tekan START untuk melanjutkan.');
+}
+
+// ═══════════════════════════════════════
+//  FLASH (SENTER KAMERA) VIA WEBSOCKET
+// ═══════════════════════════════════════
+let camFlashState = false;
+let camWs = null;
+
+function getCamIp() {
+  const inp = document.getElementById('camIpInput');
+  return inp ? inp.value.trim() || '192.168.4.4' : '192.168.4.4';
+}
+
+function updateCamWsStatus(connected) {
+  const st = document.getElementById('camWsStatusText');
+  if (st) {
+    if (connected) {
+      st.innerHTML = 'WebSocket: <span style="color:var(--ok)">Connected (Port 81)</span>';
+    } else {
+      st.innerHTML = 'WebSocket: <span style="color:var(--danger)">Disconnected</span>';
+    }
+  }
+}
+
+function connectCamWs() {
+  if (camWs && (camWs.readyState === WebSocket.CONNECTING || camWs.readyState === WebSocket.OPEN)) {
+    return;
+  }
+  const camIp = getCamIp();
+  console.log("Connecting to CAM WS: ws://" + camIp + ":81");
+  camWs = new WebSocket('ws://' + camIp + ':81');
+  camWs.onopen = () => {
+    console.log("CAM WS Connected");
+    updateCamWsStatus(true);
+  };
+  camWs.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.type === 'flash_status') {
+        camFlashState = (d.state === 1);
+        updateFlashUI();
+      }
+    } catch(err){}
+  };
+  camWs.onclose = () => {
+    console.log("CAM WS Disconnected");
+    camWs = null;
+    updateCamWsStatus(false);
+  };
+  camWs.onerror = () => {
+    console.log("CAM WS Error");
+  };
+}
+
+function sendFlash(state) {
+  if (!camWs || camWs.readyState !== WebSocket.OPEN) {
+    showToast('⚠ Menghubungkan ke Kamera... coba lagi.');
+    connectCamWs();
+    return;
+  }
+  camWs.send(JSON.stringify({ cmd: "flash", state: state }));
+}
+
+function updateFlashUI() {
+  const txt    = document.getElementById('flashStatusText');
+  const onBtn  = document.getElementById('flashOnBtn');
+  const offBtn = document.getElementById('flashOffBtn');
+  if (!txt) return;
+  if (camFlashState) {
+    txt.textContent = 'ON 💡';
+    txt.style.color = '#ffd700';
+    onBtn.style.background  = 'rgba(255,220,0,0.3)';
+    onBtn.style.borderColor = '#ffd700';
+    offBtn.style.background  = 'var(--bg)';
+    offBtn.style.borderColor = 'var(--border)';
+  } else {
+    txt.textContent = 'OFF';
+    txt.style.color = 'var(--muted)';
+    onBtn.style.background  = 'rgba(255,220,0,0.08)';
+    onBtn.style.borderColor = 'rgba(255,220,0,0.3)';
+    offBtn.style.background  = 'rgba(0,217,255,0.08)';
+    offBtn.style.borderColor = 'rgba(0,217,255,0.4)';
+  }
+}
+
+// ═══════════════════════════════════════
 //  TOAST
 // ═══════════════════════════════════════
 let toastTimer;
@@ -757,6 +932,31 @@ function updateUI(d) {
 
   // Admin full panel
   if (document.getElementById('adminView').style.display !== 'none') {
+    // Mode & Safety
+    if (d.mode !== undefined) document.getElementById('modeSelect').value = d.mode;
+    if (d.safetyLockout) {
+      document.getElementById('safetyLockoutUI').style.display = 'block';
+    } else {
+      document.getElementById('safetyLockoutUI').style.display = 'none';
+    }
+    // START Button state
+    const startBtn    = document.getElementById('startBtn');
+    const startBanner = document.getElementById('startBanner');
+    if (d.systemStarted) {
+      startBtn.textContent = '⏹ STOP / GANTI MODE';
+      startBtn.style.background = 'linear-gradient(135deg, #f85149 0%, #d43a32 100%)';
+      startBtn.style.boxShadow  = '0 4px 20px rgba(248,81,73,0.3)';
+      startBanner.className = 'start-banner running';
+      startBanner.innerHTML = '<span>▶</span><span>Sistem <strong>berjalan</strong>. Motor aktif sesuai mode.</span>';
+    } else {
+      startBtn.textContent = '▶ START SISTEM';
+      startBtn.style.background = 'linear-gradient(135deg, #00d9ff 0%, #00b8d9 100%)';
+      startBtn.style.boxShadow  = '0 4px 20px rgba(0,217,255,0.3)';
+      startBanner.className = 'start-banner';
+      startBanner.innerHTML = '<span>⏸</span><span>Pilih mode lalu tekan <strong>START SISTEM</strong> untuk mulai.</span>';
+    }
+    startBtn.disabled = !!d.safetyLockout;
+
     // Gas
     if (d.mq2Ready) {
       document.getElementById('gasVal').textContent = d.gasADC;
@@ -925,6 +1125,14 @@ function startWarmupAnim() {
 function stopWarmup() { if (warmupInterval) { clearInterval(warmupInterval); warmupInterval = null; } warmupStartTime = null; }
 
 [1, 2, 3].forEach(id => rotateNeedle(id, 0));
+
+window.onload = function() {
+  updateStatusUI();
+  updateTime();
+  setInterval(updateTime, 1000);
+  initWebSocket();
+  connectCamWs(); // otomatis coba konek ke WS kamera saat buka dashboard
+};
 </script>
 </body>
 </html>
