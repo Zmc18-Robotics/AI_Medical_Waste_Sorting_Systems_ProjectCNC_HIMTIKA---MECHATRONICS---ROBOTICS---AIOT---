@@ -7,6 +7,7 @@
   Keyboard:
     S  = Screenshot manual
     A  = Toggle auto-capture
+    F  = Toggle senter (flash) ON/OFF
     Q  = Keluar
 =============================================================
 """
@@ -26,11 +27,11 @@ from collections import deque
 from datetime import datetime
 
 # ─── Konfigurasi IP ──────────────────────────────────────────────────────────
-CAM_IP       = "192.168.4.2"
+CAM_IP       = "192.168.4.4"
 CAM_TCP_PORT = 80
 CAM_WS_PORT  = 81
 
-SMART_IP      = "192.168.4.3"
+SMART_IP      = "192.168.4.2"
 SMART_WS_PORT = 81
 
 # ─── Path ─────────────────────────────────────────────────────────────────────
@@ -41,9 +42,8 @@ MODEL_PATH     = os.path.join(BASE_DIR, "waste_model", "weights", "best.pt")
 os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
 # ─── Threshold confidence ─────────────────────────────────────────────────────
-# Model classification memberi 1 prediksi per frame (bukan per objek).
-# Turunkan ke 0.40 jika objek sering tidak terdeteksi.
-CONF_THRESHOLD = 0.50
+# Turunkan ke 0.45 agar objek kecil/samar (seperti Plester, Tisu) bisa terdeteksi.
+CONF_THRESHOLD = 0.45
 
 # ─── Mapping kelas -> info tampilan ──────────────────────────────────────────
 WASTE_INFO = {
@@ -122,7 +122,35 @@ def load_yolo_model():
 # ════════════════════════════════════════════════════════════════════════════════
 #  Kamera TCP
 # ════════════════════════════════════════════════════════════════════════════════
+def check_network_reachable(ip):
+    """
+    Cek apakah subnet dari IP tujuan bisa dicapai.
+    Jika tidak, tampilkan panduan troubleshooting.
+    """
+    import subprocess, platform
+    cmd = ["ping", "-n" if platform.system() == "Windows" else "-c", "1", "-w" if platform.system() == "Windows" else "-W", "1000", ip]
+    try:
+        result = subprocess.run(cmd, capture_output=True, timeout=5)
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
 def connect_cam_tcp(ip, port):
+    # ── Pre-check: apakah PC sudah di jaringan yang benar? ──
+    if not check_network_reachable(ip):
+        print(f"""\n{'='*55}
+[ERROR] NETWORK UNREACHABLE — {ip} tidak bisa dijangkau!
+{'='*55}
+Pastikan:
+  1. PC/laptop sudah terhubung ke WiFi 'Absolute Solver'
+     (bukan WiFi lain!)
+  2. ESP32-CAM sudah menyala & sudah connect ke WiFi
+     (lihat Serial Monitor Arduino)
+  3. Hotspot 'Absolute Solver' aktif
+  4. Matikan VPN jika sedang aktif
+{'='*55}\n""")
+    # Tetap coba connect meski ping gagal (ping bisa diblock firewall)
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(10)
     sock.connect((ip, port))
@@ -321,12 +349,15 @@ def draw_yolo_overlay(frame, detections, cls_name, cls_conf):
 # ════════════════════════════════════════════════════════════════════════════════
 def main():
     auto_capture = False
+    flash_state  = False  # Senter default OFF — nyala hanya jika tekan F
 
-    print("=" * 50)
+    print("="*58)
     print("  DETEKSI LIMBAH MEDIS — YOLOv8 Classification")
-    print("=" * 50)
-    print("  S = Screenshot  |  A = Auto-capture  |  Q = Keluar")
-    print("=" * 50)
+    print("="*58)
+    print("  S = Screenshot  |  A = Auto-capture  |  F = Flash  |  Q = Keluar")
+    print("  ► Flash (senter) OFF secara default. Tekan F untuk menyalakan.")
+    print("  ► Motor OFF secara default. Tekan START di web dashboard.")
+    print("="*58)
 
     yolo_model = load_yolo_model()
 
@@ -351,10 +382,12 @@ def main():
             print(f"[SF] Smart Bin target HTTP: http://{SMART_IP}/api")
             
             def send_flash(state):
-                try:
-                    cam_ws.send(json.dumps({"cmd": "flash", "state": 1 if state else 0}))
-                except Exception:
-                    pass
+                def _do_send():
+                    try:
+                        cam_ws.send(json.dumps({"cmd": "flash", "state": 1 if state else 0}))
+                    except Exception:
+                        pass
+                threading.Thread(target=_do_send, daemon=True).start()
 
             def send_sf(cmd_dict):
                 """Kirim perintah ke Smart Bin secara HTTP GET (Anti-Drop/Teknik Drone)."""
@@ -372,16 +405,18 @@ def main():
                         req.close()
                         print(f"[SF] Berhasil!")
                     except Exception as e:
-                        print(f"[SF] GAGAL HTTP: {e}")
+                        print(f"\n[SF] GAGAL HTTP KE SMART BIN: {e}")
+                        print(f"[SF] PASTIKAN SMART_IP '{SMART_IP}' SUDAH SESUAI DENGAN IP BARU DARI SERIAL MONITOR!\n")
                 
                 # Kirim pakai thread fire-and-forget agar kamera sama sekali tidak nge-lag
                 threading.Thread(target=_do_send, daemon=True).start()
 
-            send_flash(True)
-            print("[CAM] Senter ON.")
-            
-            # Start motor continuously at startup
-            send_sf({"cmd": "machine", "on": True})
+            # Flash (senter): sinkron ke state terakhir (default OFF, bisa berubah saat reconnect)
+            send_flash(flash_state)
+            print(f"[CAM] Senter {'ON' if flash_state else 'OFF'} (sinkron state terakhir).")
+
+            # Motor TIDAK di-start otomatis — tunggu tombol START di web dashboard
+            print("[SYSTEM] Motor standby. Tekan tombol START di web dashboard untuk mulai.")
 
             recv_t = threading.Thread(target=receiver_thread, args=(cam_sock,), daemon=True)
             recv_t.start()
@@ -400,6 +435,7 @@ def main():
             
             last_active_servo = None
             servo_hold_time   = 0.0
+            last_servo_change_time = 0.0
             SERVO_HOLD_DELAY  = 3.0
 
             while recv_t.is_alive():
@@ -413,9 +449,10 @@ def main():
                 if frame is None:
                     continue
 
-                # ── Deteksi wajah ────────────────────────────────────
-                gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+                # ── Deteksi wajah (DIMATIKAN agar tidak memberatkan CPU / Lag) ──
+                # gray  = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                # faces = face_cascade.detectMultiScale(gray, 1.1, 5)
+                faces = [] # Disable face detection for performance
 
                 if len(faces) > 0:
                     for (x, y, w, h) in faces:
@@ -427,7 +464,7 @@ def main():
                         # send_sf({"cmd": "servo", "id": 1, "angle": 90}) # Dihapus agar tidak konflik dengan servo pemilah
                         face_active = True
                 else:
-                    face_txt = "TIDAK ADA WAJAH"
+                    face_txt = "" # Dikosongkan agar UI lebih bersih
                     face_col = (0, 0, 200)
                     if face_active:
                         # send_sf({"cmd": "machine", "on": False}) # Dihapus agar motor berjalan terus
@@ -463,18 +500,23 @@ def main():
                         servo_hold_time = now + SERVO_HOLD_DELAY
                         
                         if target_servo != last_active_servo:
-                            # Kembalikan servo sebelumnya ke 0 derajat
-                            if last_active_servo is not None:
-                                send_sf({"cmd": "servo", "id": last_active_servo, "angle": 0})
-                                print(f"[SERVO] Servo {last_active_servo} ditutup.")
-                            
-                            # Menentukan nama objek yang terdeteksi
-                            detected_name = obj_name if last_detections else last_cls_name
-                            
-                            # Buka servo target ke 90 derajat & sertakan nama objek serta kategori ke web dashboard
-                            send_sf({"cmd": "servo", "id": target_servo, "angle": 90, "waste": detected_name, "cat": detected_category})
-                            print(f"[SERVO] Kategori '{detected_category}' terdeteksi -> Servo {target_servo} dibuka.")
-                            last_active_servo = target_servo
+                            # ── ANTI-FLICKER: Abaikan jika model berganti-ganti tebakan dalam waktu singkat (2 detik) ──
+                            if last_active_servo is None or (now - last_servo_change_time) > 2.0:
+                                # Kembalikan servo sebelumnya ke 0 derajat
+                                if last_active_servo is not None:
+                                    send_sf({"cmd": "servo", "id": last_active_servo, "angle": 0})
+                                    print(f"[SERVO] Servo {last_active_servo} ditutup.")
+                                
+                                # Menentukan nama objek yang terdeteksi
+                                detected_name = obj_name if last_detections else last_cls_name
+                                
+                                # Buka servo target ke 90 derajat & sertakan nama objek serta kategori ke web dashboard
+                                send_sf({"cmd": "servo", "id": target_servo, "angle": 90, "waste": detected_name, "cat": detected_category})
+                                print(f"[SERVO] Kategori '{detected_category}' terdeteksi -> Servo {target_servo} dibuka.")
+                                last_active_servo = target_servo
+                                last_servo_change_time = now
+                            else:
+                                print(f"[YOLO] Flickering terdeteksi. Mengabaikan perubahan ke Servo {target_servo}.")
                     else:
                         # Jika tidak ada yang terdeteksi, tutup setelah delay habis
                         if last_active_servo is not None and now > servo_hold_time:
@@ -539,6 +581,11 @@ def main():
                     auto_capture = not auto_capture
                     print(f"[AUTO-CAPTURE] {'ON' if auto_capture else 'OFF'}")
 
+                elif key == ord('f'):
+                    flash_state = not flash_state
+                    send_flash(flash_state)
+                    print(f"[FLASH] Senter {'ON' if flash_state else 'OFF'}")
+
         except KeyboardInterrupt:
             print("Keluar.")
             break
@@ -551,7 +598,8 @@ def main():
             try:
                 if cam_ws:
                     cam_ws.send(json.dumps({"cmd": "flash", "state": 0}))
-                    print("[CAM] Senter OFF.")
+                    flash_state = False  # Reset state agar setelah reconnect flash tetap OFF
+                    print("[CAM] Senter OFF (koneksi putus).")
             except Exception:
                 pass
             if cam_sock: cam_sock.close()
