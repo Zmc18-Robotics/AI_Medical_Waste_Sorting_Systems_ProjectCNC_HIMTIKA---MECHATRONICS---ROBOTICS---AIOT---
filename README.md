@@ -116,9 +116,14 @@ Antarmuka web yang modern, responsif, dan kaya fitur. Dapat diakses langsung via
  ┃       ┗ 📜 best.pt        ← Bobot AI hasil training (ignore-git)
  ┣ 📂 Esp32/
  ┃ ┗ 📜 Esp32.ino            ← Firmware utama ESP32 (Web Server, WebSockets, Sensor, Hardware)
+ ┣ 📂 Esp32_CAM/
+ ┃ ┗ 📂 Esp32_CAM/
+ ┃    ┗ 📜 Esp32_CAM.ino     ← Firmware modul ESP32-CAM (TCP streaming video & kontrol Flash)
+ ┣ 📂 Esp32_Hotspot/
+ ┃ ┗ 📜 Esp32_Hotspot.ino    ← Firmware ESP32 sebagai dedicated Access Point (Router Lokal)
  ┣ 📂 Backup/
- ┃ ┣ 📜 Esp32_BACKUP.ino     ← Firmware cadangan ESP32
- ┃ ┗ 📜 Esp32CAM_BACKUP.ino  ← Firmware ESP32-CAM (TCP streaming video)
+ ┃ ┣ 📜 Esp32_BACKUP.ino     ← Firmware cadangan ESP32 Utama
+ ┃ ┗ 📜 Esp32CAM_BACKUP.ino  ← Firmware cadangan ESP32-CAM
  ┗ 📜 README.md              ← Dokumentasi Repositori
 ```
 
