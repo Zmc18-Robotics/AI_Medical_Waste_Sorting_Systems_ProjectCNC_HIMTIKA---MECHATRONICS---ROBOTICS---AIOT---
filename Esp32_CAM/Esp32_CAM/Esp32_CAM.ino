@@ -36,10 +36,11 @@
 WiFiServer       tcpServer(80);
 WebSocketsServer wsServer(81);
 
-bool flashOn = true;  // default ON
+bool flashOn = false;  // default OFF — dikontrol dari Python (tekan F) atau web dashboard
 
 // ─── DEKLARASI FUNGSI ───────────────────────────────────
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length);
+void setFlash(bool on);
 
 // ────────────────────────────────────────────────────────
 void setup() {
@@ -79,17 +80,17 @@ void setup() {
   }
   Serial.println("Kamera OK");
 
-  // ── Senter dinyalakan SETELAH camera init ──────────────
+  // ── Senter default OFF setelah camera init ───────────────
   // GPIO 4 dipakai bersama SD card driver, jadi harus di-set
   // ulang setelah esp_camera_init() agar tidak di-override
   pinMode(PIN_FLASH, OUTPUT);
-  digitalWrite(PIN_FLASH, HIGH);
-  Serial.println("Senter ON");
+  digitalWrite(PIN_FLASH, LOW);   // ← OFF secara default
+  flashOn = false;
+  Serial.println("Senter OFF (default). Kontrol via Python key F / web dashboard.");
 
   // Koneksi WiFi
-  // ── IP Statis agar Python selalu connect ke alamat ini ──
-  // IP Statis dinonaktifkan — biar dapat IP otomatis dari router/hotspot HP
-  // IPAddress staticIP(192, 168, 4, 2);
+  // ── KITA MATIKAN IP STATIS AGAR DAPAT IP OTOMATIS (DHCP) DARI HOTSPOT ──
+  // IPAddress staticIP(192, 168, 4, 3); 
   // IPAddress gateway(192, 168, 4, 1);
   // IPAddress subnet(255, 255, 255, 0);
   // WiFi.config(staticIP, gateway, subnet);
@@ -160,8 +161,9 @@ void loop() {
 void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length) {
   if (type == WStype_CONNECTED) {
     Serial.printf("[WS] Client #%d terhubung\n", num);
-    // Paksa ulang senter ke ON setiap kali ada client baru connect
-    digitalWrite(PIN_FLASH, HIGH);
+    // Kirim status flash saat ini ke client yang baru connect
+    String status = "{\"type\":\"flash_status\",\"state\":" + String(flashOn ? 1 : 0) + "}";
+    wsServer.sendTXT(num, status);
     return;
   }
   if (type == WStype_DISCONNECTED) {
@@ -183,12 +185,24 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
   if (!cmd) return;
 
   if (strcmp(cmd, "flash") == 0) {
-    // Perintah flash dari Python diabaikan — senter selalu ON
-    // Uncomment baris di bawah kalau mau Python bisa kontrol lagi:
-    // int state = doc["state"] | 0;
-    // flashOn = (state != 0);
-    // digitalWrite(PIN_FLASH, flashOn ? HIGH : LOW);
-    Serial.println("[Senter] Perintah diterima, tapi senter dikunci ON");
-    digitalWrite(PIN_FLASH, HIGH);  // paksa tetap ON
+    // Jika ada field "state": set ke nilai tersebut
+    // Jika tidak ada (hanya {"cmd":"flash"}): toggle
+    if (doc.containsKey("state")) {
+      int s = doc["state"] | 0;
+      setFlash(s != 0);
+    } else {
+      setFlash(!flashOn);  // toggle
+    }
   }
+}
+
+// ────────────────────────────────────────────────────────
+// Set / broadcast status senter
+void setFlash(bool on) {
+  flashOn = on;
+  digitalWrite(PIN_FLASH, flashOn ? HIGH : LOW);
+  Serial.printf("[Senter] %s\n", flashOn ? "ON" : "OFF");
+  // Broadcast ke semua WS client
+  String status = "{\"type\":\"flash_status\",\"state\":" + String(flashOn ? 1 : 0) + "}";
+  wsServer.broadcastTXT(status);
 }
