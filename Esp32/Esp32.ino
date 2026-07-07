@@ -28,9 +28,9 @@
  *  │ Servo 1             │ 33       │ Manual via Web          │
  *  │ Servo 2             │ 19       │ Manual via Web          │
  *  │ Servo 3             │ 18       │ Manual via Web          │
- *  │ MQ-2 AOUT           │ 26       │ Analog                  │
+ *  │ MQ-2 AOUT           │ 35       │ Analog (ADC1)           │
  *  │ MQ-2 DOUT           │ 27       │ tidak dipakai           │
- *  │ Water Level AOUT    │ 14       │ Analog (ADC1_CH6)       │
+ *  │ Water Level AOUT    │ 36       │ Analog (ADC1, pin VP)   │
  *  │ Flame Sensor AOUT   │ 34       │ Analog                  │
  *  │ Flame Sensor DOUT   │ 13       │ Digital                 │
  *  │ RGB LED - Red       │ 15       │ PWM                     │
@@ -61,9 +61,9 @@
 #define PIN_SERVO1      33
 #define PIN_SERVO2      19
 #define PIN_SERVO3      18
-#define PIN_GAS_AOUT    26
+#define PIN_GAS_AOUT    35 // Pindah ke 35 (ADC1) karena ADC2 mati saat WiFi nyala
 #define PIN_GAS_DOUT    27
-#define PIN_WATER_AOUT  14
+#define PIN_WATER_AOUT  36 // Pindah ke 36 (ADC1) karena ADC2 mati saat WiFi nyala
 #define PIN_FLAME_AOUT  34
 #define PIN_FLAME_DOUT  13
 
@@ -78,21 +78,21 @@
 #define PIN_MOTOR_IN1    4
 #define PIN_MOTOR_IN2   17
 #define PIN_MOTOR_ENA   16
-#define PWM_MOTOR_FREQ  1000
+#define PWM_MOTOR_FREQ   100   // 100Hz: jauh lebih dingin untuk L298N (vs 1000Hz)
 #define PWM_MOTOR_RES      8
-#define MOTOR_SPEED_KICK  204   // 80% speed for kickstart
-#define MOTOR_SPEED_RUN   179   // 70% speed for normal run
-#define MOTOR_KICK_MS     400   // duration of kickstart in ms
+#define MOTOR_SPEED_KICK  204   // 80% kickstart (turun dari 100% agar L298N tidak overheat)
+#define MOTOR_SPEED_RUN   200   // 78% speed normal
+#define MOTOR_KICK_MS     600   // 600ms kickstart (sedikit lebih lama agar konveyor pasti jalan)
 
 // ── MQ-2 ─────────────────────────────────────────────────────
-#define MQ2_THRESHOLD_DELTA  150
-#define MQ2_THRESHOLD_HYST    50
+#define MQ2_THRESHOLD_ON    2200   // Batas mutlak untuk mendeteksi asap tebal
+#define MQ2_THRESHOLD_OFF   1800   // Batas mutlak untuk menganggap udara kembali bersih
 #define MQ2_WARMUP_MS       20000
 #define MQ2_READ_INTERVAL     500
 
 // ── Water Level ──────────────────────────────────────────────
-#define WATER_THRESHOLD_ON    800
-#define WATER_THRESHOLD_OFF   600
+#define WATER_THRESHOLD_ON    150
+#define WATER_THRESHOLD_OFF   100
 #define WATER_READ_INTERVAL   500
 
 // ── Flame ─────────────────────────────────────────────────────
@@ -389,6 +389,26 @@ const char DASHBOARD_HTML[] PROGMEM = R"====(
   .motor-btn.stop-btn { border-color: var(--danger); color: var(--danger); }
   .motor-btn.stop-btn:hover { background: rgba(248,81,73,0.08); }
 
+  /* START BUTTON */
+  .start-btn {
+    width: 100%; padding: 14px; border-radius: var(--radius);
+    background: linear-gradient(135deg, #00d9ff 0%, #00b8d9 100%);
+    color: #000; font-size: 15px; font-weight: 700; border: none;
+    cursor: pointer; transition: all 0.2s; letter-spacing: 0.04em;
+    text-transform: uppercase; margin-top: 14px;
+    box-shadow: 0 4px 20px rgba(0,217,255,0.3);
+  }
+  .start-btn:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(0,217,255,0.45); }
+  .start-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+  .start-banner {
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(0,217,255,0.06); border: 1px solid rgba(0,217,255,0.25);
+    border-radius: 8px; padding: 10px 14px; margin-top: 10px; font-size: 12px; color: var(--muted);
+  }
+  .start-banner.running {
+    background: rgba(63,185,80,0.06); border-color: rgba(63,185,80,0.3); color: var(--ok);
+  }
+
   /* SERVO CARDS */
   .servo-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; transition: border-color 0.2s; }
   .servo-card.active { border-color: rgba(0,217,255,0.5); }
@@ -531,6 +551,54 @@ const char DASHBOARD_HTML[] PROGMEM = R"====(
 
   <!-- ═══ ADMIN: FULL PANEL ═══ -->
   <div class="admin-only" id="adminView">
+
+    <!-- MODE OPERASI & KEAMANAN -->
+    <div class="section-label">Mode Operasi & Keamanan</div>
+    <div class="card" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 250px;">
+          <div class="card-label">Mode Konveyor</div>
+          <select id="modeSelect" onchange="sendMode()" class="form-input" style="width: 100%; max-width: 300px; cursor: pointer;">
+            <option value="0">Keep Going (Motor selalu menyala)</option>
+            <option value="1">Less Energy (Hemat energi, nyala saat ada objek)</option>
+          </select>
+          <button id="startBtn" class="start-btn" onclick="sendStart()">▶ START SISTEM</button>
+          <div id="startBanner" class="start-banner">
+            <span>⏸</span>
+            <span>Pilih mode lalu tekan <strong>START SISTEM</strong> untuk mulai.</span>
+          </div>
+        </div>
+        <div id="safetyLockoutUI" style="display: none; flex: 1; min-width: 250px; background: rgba(248,81,73,0.1); border: 1px solid rgba(248,81,73,0.4); padding: 12px; border-radius: var(--radius); animation: pulse-border 1.5s infinite;">
+          <div style="color: var(--danger); font-weight: 600; font-size: 13px; margin-bottom: 6px;">⚠ SISTEM TERKUNCI (SAFETY LOCKOUT)</div>
+          <div style="color: var(--muted); font-size: 12px; margin-bottom: 10px;">Motor ditahan karena sensor sempat mendeteksi bahaya. Pastikan fisik aman sebelum melanjutkan.</div>
+          <button onclick="sendResume()" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--ok); color: #000; font-weight: 600; border: none; cursor: pointer; transition: opacity 0.2s;" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">⟳ Nyalakan Kembali</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SENTER KAMERA -->
+    <div class="section-label">Senter Kamera (ESP32-CAM)</div>
+    <div class="card" style="margin-bottom: 20px;">
+      <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px;">
+          <div class="card-label">Status Senter</div>
+          <div id="flashStatusText" style="font-size: 26px; font-weight: 700; color: var(--muted); margin: 8px 0;">OFF</div>
+          <div style="font-size: 12px; color: var(--muted);">Kontrol via tombol di bawah atau tekan <code style="color:var(--accent);">F</code> di Python</div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px; min-width: 180px;">
+          <button id="flashOnBtn" onclick="sendFlash(1)" style="padding: 11px 20px; border-radius: var(--radius); background: rgba(255,220,0,0.15); border: 1px solid rgba(255,220,0,0.4); color: #ffd700; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">💡 Nyalakan Senter</button>
+          <button id="flashOffBtn" onclick="sendFlash(0)" style="padding: 11px 20px; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--border); color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">🔦 Matikan Senter</button>
+        </div>
+        <div style="flex: 1; min-width: 200px;">
+          <div class="card-label">IP ESP32-CAM</div>
+          <div style="display: flex; gap: 8px;">
+            <input id="camIpInput" class="form-input" type="text" value="192.168.4.4" placeholder="192.168.4.4" style="max-width: 140px;" />
+            <button onclick="connectCamWs()" style="padding: 0 12px; border-radius: var(--radius); background: var(--border); border: none; color: #fff; cursor: pointer; font-size: 12px;">Connect</button>
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-top: 6px;" id="camWsStatusText">WebSocket: <span style="color:var(--danger)">Disconnected</span></div>
+        </div>
+      </div>
+    </div>
 
     <!-- SENSORS -->
     <div class="section-label">Status Sensor</div>
@@ -711,8 +779,8 @@ const char DASHBOARD_HTML[] PROGMEM = R"====(
 // ═══════════════════════════════════════
 //  IP CONFIG
 // ═══════════════════════════════════════
-// HARDCODED ESP32 IP karena IP statis selalu 192.168.4.3
-let esp32Host = '192.168.4.3';
+// Dinamis mengikuti IP ESP32 di browser
+let esp32Host = window.location.hostname;
 
 function saveIp() {
   const ip = document.getElementById('esp32IpInput').value.trim();
@@ -888,6 +956,31 @@ function updateUI(d) {
 
   // Admin full panel
   if (document.getElementById('adminView').style.display !== 'none') {
+    // Mode & Safety
+    if (d.mode !== undefined) document.getElementById('modeSelect').value = d.mode;
+    if (d.safetyLockout) {
+      document.getElementById('safetyLockoutUI').style.display = 'block';
+    } else {
+      document.getElementById('safetyLockoutUI').style.display = 'none';
+    }
+    // START Button state
+    const startBtn    = document.getElementById('startBtn');
+    const startBanner = document.getElementById('startBanner');
+    if (d.systemStarted) {
+      startBtn.textContent = '⏹ STOP / GANTI MODE';
+      startBtn.style.background = 'linear-gradient(135deg, #f85149 0%, #d43a32 100%)';
+      startBtn.style.boxShadow  = '0 4px 20px rgba(248,81,73,0.3)';
+      startBanner.className = 'start-banner running';
+      startBanner.innerHTML = '<span>▶</span><span>Sistem <strong>berjalan</strong>. Motor aktif sesuai mode.</span>';
+    } else {
+      startBtn.textContent = '▶ START SISTEM';
+      startBtn.style.background = 'linear-gradient(135deg, #00d9ff 0%, #00b8d9 100%)';
+      startBtn.style.boxShadow  = '0 4px 20px rgba(0,217,255,0.3)';
+      startBanner.className = 'start-banner';
+      startBanner.innerHTML = '<span>⏸</span><span>Pilih mode lalu tekan <strong>START SISTEM</strong> untuk mulai.</span>';
+    }
+    startBtn.disabled = !!d.safetyLockout;
+
     // Gas
     if (d.mq2Ready) {
       document.getElementById('gasVal').textContent = d.gasADC;
@@ -1005,6 +1098,117 @@ function speedInput(v) {
 function speedSend(v) { v = parseInt(v); motorSpeed = v; send({ cmd: 'motor', dir: motorState, speed: v }); }
 
 // ═══════════════════════════════════════
+//  FLASH (SENTER KAMERA) VIA WEBSOCKET
+// ═══════════════════════════════════════
+let camFlashState = false;
+let camWs = null;
+
+function getCamIp() {
+  const inp = document.getElementById('camIpInput');
+  return inp ? inp.value.trim() || '192.168.4.4' : '192.168.4.4';
+}
+
+function updateCamWsStatus(connected) {
+  const st = document.getElementById('camWsStatusText');
+  if (st) {
+    if (connected) {
+      st.innerHTML = 'WebSocket: <span style="color:var(--ok)">Connected (Port 81)</span>';
+    } else {
+      st.innerHTML = 'WebSocket: <span style="color:var(--danger)">Disconnected</span>';
+    }
+  }
+}
+
+function connectCamWs() {
+  if (camWs && (camWs.readyState === WebSocket.CONNECTING || camWs.readyState === WebSocket.OPEN)) {
+    return;
+  }
+  const camIp = getCamIp();
+  console.log("Connecting to CAM WS: ws://" + camIp + ":81");
+  camWs = new WebSocket('ws://' + camIp + ':81');
+  camWs.onopen = () => {
+    console.log("CAM WS Connected");
+    updateCamWsStatus(true);
+  };
+  camWs.onmessage = (e) => {
+    try {
+      const d = JSON.parse(e.data);
+      if (d.type === 'flash_status') {
+        camFlashState = (d.state === 1);
+        updateFlashUI();
+      }
+    } catch(err){}
+  };
+  camWs.onclose = () => {
+    console.log("CAM WS Disconnected");
+    camWs = null;
+    updateCamWsStatus(false);
+  };
+  camWs.onerror = () => {
+    console.log("CAM WS Error");
+  };
+}
+
+function sendFlash(state) {
+  if (!camWs || camWs.readyState !== WebSocket.OPEN) {
+    showToast('⚠ Menghubungkan ke Kamera... coba lagi.');
+    connectCamWs();
+    return;
+  }
+  camWs.send(JSON.stringify({ cmd: "flash", state: state }));
+}
+
+function updateFlashUI() {
+  const txt = document.getElementById('flashStatusText');
+  const onBtn  = document.getElementById('flashOnBtn');
+  const offBtn = document.getElementById('flashOffBtn');
+  if (!txt) return;
+  if (camFlashState) {
+    txt.textContent = 'ON 💡';
+    txt.style.color = '#ffd700';
+    onBtn.style.background  = 'rgba(255,220,0,0.3)';
+    onBtn.style.borderColor = '#ffd700';
+    offBtn.style.background  = 'var(--bg)';
+    offBtn.style.borderColor = 'var(--border)';
+  } else {
+    txt.textContent = 'OFF';
+    txt.style.color = 'var(--muted)';
+    onBtn.style.background  = 'rgba(255,220,0,0.08)';
+    onBtn.style.borderColor = 'rgba(255,220,0,0.3)';
+    offBtn.style.background  = 'rgba(0,217,255,0.08)';
+    offBtn.style.borderColor = 'rgba(0,217,255,0.4)';
+  }
+}
+
+// ═══════════════════════════════════════
+//  MODE & SAFETY
+// ═══════════════════════════════════════
+function sendMode() {
+  const m = parseInt(document.getElementById('modeSelect').value);
+  send({ cmd: 'set_mode', mode: m });
+  const modeNames = { 0: 'Keep Going', 1: 'Less Energy' };
+  showToast('Mode: ' + (modeNames[m] || m) + '. Tekan START untuk mulai.');
+}
+
+function sendStart() {
+  const startBtn = document.getElementById('startBtn');
+  if (startBtn && startBtn.textContent.includes('STOP')) {
+    // Jika sudah running, tombol jadi STOP — ganti mode untuk reset
+    const m = parseInt(document.getElementById('modeSelect').value);
+    send({ cmd: 'set_mode', mode: m });
+    showToast('Sistem dihentikan. Tekan START untuk memulai ulang.');
+  } else {
+    send({ cmd: 'start_system' });
+    showToast('Sistem di-START!');
+  }
+}
+
+function sendResume() {
+  send({ cmd: 'resume' });
+  showToast('Safety Lockout direset. Tekan START untuk melanjutkan.');
+}
+
+// ═══════════════════════════════════════
 //  SERVO
 // ═══════════════════════════════════════
 function updateServoUI(id, angle) {
@@ -1078,6 +1282,14 @@ function startWarmupAnim() {
 function stopWarmup() { if (warmupInterval) { clearInterval(warmupInterval); warmupInterval = null; } warmupStartTime = null; }
 
 [1, 2, 3].forEach(id => rotateNeedle(id, 0));
+
+window.onload = function() {
+  updateStatusUI();
+  updateTime();
+  setInterval(updateTime, 1000);
+  initWebSocket();
+  connectCamWs(); // otomatis coba konek ke WS kamera saat buka dashboard
+};
 </script>
 </body>
 </html>
@@ -1098,6 +1310,11 @@ WebSocketsServer webSocket(81);
 bool   gasAlert   = false;
 bool   waterAlert = false;
 bool   flameAlert = false;
+bool   safetyLockout = false;
+bool   systemStarted = false; // false = belum di-START dari web, true = sistem berjalan
+
+int    conveyorMode = 0; // 0 = Keep Going, 1 = Less Energy
+uint32_t lessEnergyStopAt = 0;
 
 int    servoAngle1 = 0;
 int    servoAngle2 = 0;
@@ -1110,7 +1327,10 @@ int    lastActiveServo = 0;  // 0 = tidak ada, 1/2/3 = servo aktif
 
 // Motor
 String   motorState = "stop";   // "fwd" | "bwd" | "stop"
-int      motorSpeed = 153;      // 0–255  (60% default — kecepatan konveyor)
+int      motorSpeed = 200;      // 0–255  (78% default — kecepatan konveyor)
+uint32_t motorKickUntil     = 0;
+uint32_t motorAutoReKickAt  = 0; // Waktu auto re-kick berikutnya (lawan Back-EMF)
+uint32_t motorReKickUntil   = 0; // Berakhirnya pulse re-kick
 
 // Push Button
 bool     btnPressed   = false;
@@ -1149,13 +1369,15 @@ const RGBColor COL_WATER_B = {255, 255, 255};
 bool     lcdClearPending = false;
 uint32_t lcdClearTimer   = 0;
 
-// Sensor data
 int  lastGasVal   = 0;
+bool lastGasD0    = false;
+uint32_t gasDoutLowSince = 0;  // Kapan DOUT mulai LOW (debounce 2 detik)
 int  lastWaterVal = 0;
 int  lastFlameADC = 0;
 bool lastFlameD0  = false;
 
 uint32_t lastWsBroadcast = 0;
+uint32_t lastDebugPrint  = 0;
 
 // Testing Flags
 uint32_t testGasUntil    = 0;
@@ -1166,9 +1388,9 @@ uint32_t testMotorUntil  = 0;
 int      testMotorStep   = 0;
 
 // ── Servo Delay (sesuai jarak titik jatuh di konveyor) ───────
-#define SERVO_DELAY_1  1700   // ms — Infeksius
-#define SERVO_DELAY_2  1950   // ms — Non-Infeksius
-#define SERVO_DELAY_3  2200   // ms — B3
+#define SERVO_DELAY_1  1700   // ms - Infeksius
+#define SERVO_DELAY_2  1950   // ms - Non-Infeksius
+#define SERVO_DELAY_3  2850   // ms - B3
 
 struct ServoJob {
   bool     pending;
@@ -1179,10 +1401,7 @@ struct ServoJob {
 };
 ServoJob servoJobs[4];  // index 1–3 dipakai, 0 diabaikan
 
-// Auto-resume konveyor setelah test sensor selesai
-uint32_t autoResumeMotorAt = 0;
-// Kick-start ramp-down timer (80% → 60%)
-uint32_t motorKickUntil    = 0;
+// Auto-resume konveyor dihapus sesuai permintaan
 
 // ─────────────────────────────────────────────────────────────
 //  FORWARD DECLARATIONS
@@ -1214,33 +1433,36 @@ void setup() {
 
   pinMode(PIN_BUZZER,     OUTPUT);
   pinMode(PIN_BUTTON,     INPUT_PULLUP);
-  pinMode(PIN_GAS_AOUT,   INPUT);
-  pinMode(PIN_GAS_DOUT,   INPUT);
+  pinMode(PIN_GAS_AOUT,   INPUT_PULLDOWN); // Pulldown cegah floating pin dari sensor air
+  pinMode(PIN_GAS_DOUT,   INPUT);           // MQ-2 punya resistor pull-up onboard sendiri
   pinMode(PIN_WATER_AOUT, INPUT);
   pinMode(PIN_FLAME_AOUT, INPUT);
   pinMode(PIN_FLAME_DOUT, INPUT_PULLDOWN);
 
-  // Motor DC
+  // Motor DC (Paksa ke Channel 4 agar tidak tabrakan dengan Servo)
   pinMode(PIN_MOTOR_IN1, OUTPUT);
   pinMode(PIN_MOTOR_IN2, OUTPUT);
-  ledcAttach(PIN_MOTOR_ENA, PWM_MOTOR_FREQ, PWM_MOTOR_RES);
+  ledcAttachChannel(PIN_MOTOR_ENA, PWM_MOTOR_FREQ, PWM_MOTOR_RES, 4);
   stopMotor();
 
-  // RGB
-  ledcAttach(PIN_RGB_R, PWM_FREQ, PWM_RES);
-  ledcAttach(PIN_RGB_G, PWM_FREQ, PWM_RES);
-  ledcAttach(PIN_RGB_B, PWM_FREQ, PWM_RES);
+  // RGB (Paksa ke Channel 5, 6, 7)
+  ledcAttachChannel(PIN_RGB_R, PWM_FREQ, PWM_RES, 5);
+  ledcAttachChannel(PIN_RGB_G, PWM_FREQ, PWM_RES, 6);
+  ledcAttachChannel(PIN_RGB_B, PWM_FREQ, PWM_RES, 7);
   setRGBOff();
 
   analogReadResolution(12);
-  noTone(PIN_BUZZER);
-  digitalWrite(PIN_BUZZER, LOW);
+  
+  // Buzzer (Paksa ke Channel 8 agar tidak membajak Timer Servo)
+  ledcAttachChannel(PIN_BUZZER, 2000, 8, 8); // 2000Hz, 8-bit, Channel 8
+  ledcWrite(PIN_BUZZER, 0);
 
   // ========== SERVO SETUP ==========
   ESP32PWM::allocateTimer(0);
   ESP32PWM::allocateTimer(1);
   ESP32PWM::allocateTimer(2);
-  ESP32PWM::allocateTimer(3);
+  // Timer 3 sengaja TIDAK dialokasikan untuk Servo, 
+  // agar bisa dipakai oleh ledcAttachChannel (Motor & RGB)
 
   servo1.setPeriodHertz(50);
   servo2.setPeriodHertz(50);
@@ -1258,8 +1480,12 @@ void setup() {
   servo3.write(0);
   delay(200);
 
+  Serial.print("[Servo] servo1 attached? ");
+  Serial.println(servo1.attached() ? "YES" : "NO");
   Serial.print("[Servo] servo2 attached? ");
   Serial.println(servo2.attached() ? "YES" : "NO");
+  Serial.print("[Servo] servo3 attached? ");
+  Serial.println(servo3.attached() ? "YES" : "NO");
   // ====================================
 
   Wire.begin(21, 22);
@@ -1267,9 +1493,8 @@ void setup() {
   lcd.setCursor(0, 0); lcd.print("Connecting WiFi");
   lcd.setCursor(0, 1); lcd.print(WIFI_SSID);
 
-  // ── IP Statis agar Python selalu bisa connect ke alamat ini ──
-  // IP Statis dinonaktifkan — biar dapat IP otomatis dari router/hotspot HP
-  // IPAddress staticIP(192, 168, 4, 3);
+  // ── KITA MATIKAN IP STATIS AGAR DAPAT IP OTOMATIS (DHCP) DARI HOTSPOT ──
+  // IPAddress staticIP(192, 168, 4, 4); 
   // IPAddress gateway(192, 168, 4, 1);
   // IPAddress subnet(255, 255, 255, 0);
   // WiFi.config(staticIP, gateway, subnet);
@@ -1327,6 +1552,15 @@ void setup() {
 
           Serial.printf("[HTTP] Servo %d -> %d deg dijadwalkan dalam %dms (Objek: %s)\n",
                         id, angle, delayMs, w.c_str());
+
+          // Mode Less Energy: motor hanya nyala jika sistem sudah di-START dari web
+          if (angle > 0 && conveyorMode == 1 && systemStarted && !safetyLockout && !gasAlert && !waterAlert && !flameAlert) {
+            startConveyor();
+            lessEnergyStopAt = millis() + 5000;
+            Serial.println("[HTTP] Less Energy: Motor ON untuk 5 detik (ada objek)");
+          } else if (angle > 0 && conveyorMode == 1 && !systemStarted) {
+            Serial.println("[HTTP] Less Energy: Sistem belum di-START, motor diabaikan.");
+          }
         }
         server.send(200, "text/plain", "OK");
         broadcastStatus();
@@ -1385,7 +1619,7 @@ void loop() {
 
   // --- HARDWARE TEST HANDLER ---
   if (testBuzzerUntil > 0) {
-    if (now >= testBuzzerUntil) { noTone(PIN_BUZZER); digitalWrite(PIN_BUZZER, LOW); testBuzzerUntil = 0; }
+    if (now >= testBuzzerUntil) { ledcWrite(PIN_BUZZER, 0); testBuzzerUntil = 0; }
   }
   if (testMotorUntil > 0) {
     if (testMotorStep == 1) {
@@ -1397,13 +1631,31 @@ void loop() {
     }
   }
 
-  // --- MOTOR KICK-START RAMP-DOWN (80% -> 60%) ---
+  // --- MOTOR KICK-START RAMP-DOWN (80% -> 78%) ---
   if (motorKickUntil > 0 && now >= motorKickUntil && motorState == "fwd") {
     motorKickUntil = 0;
     motorSpeed = MOTOR_SPEED_RUN;
     ledcWrite(PIN_MOTOR_ENA, motorSpeed);
-    Serial.println("[MOTOR] Ramp-down ke 60%");
+    motorAutoReKickAt = now + 8000; // Jadwalkan re-kick pertama 8 detik lagi
+    Serial.println("[MOTOR] Ramp-down ke 78%");
     broadcastStatus();
+  }
+
+  // --- MOTOR AUTO RE-KICK (lawan Back-EMF setiap 8 detik) ---
+  if (motorState == "fwd" && motorAutoReKickAt > 0 && now >= motorAutoReKickAt
+      && motorKickUntil == 0 && motorReKickUntil == 0) {
+    // Mulai pulse 100% selama 150ms
+    ledcWrite(PIN_MOTOR_ENA, 255);
+    motorReKickUntil  = now + 150;
+    motorAutoReKickAt = 0;
+    Serial.println("[MOTOR] Auto re-kick 100% (150ms)");
+  }
+  if (motorReKickUntil > 0 && now >= motorReKickUntil) {
+    // Selesai pulse, kembali ke kecepatan normal
+    motorReKickUntil  = 0;
+    motorAutoReKickAt = now + 8000; // Jadwalkan re-kick berikutnya
+    ledcWrite(PIN_MOTOR_ENA, motorSpeed);
+    Serial.println("[MOTOR] Re-kick selesai, kembali ke 78%");
   }
 
   // --- SERVO SCHEDULED JOBS (delay konveyor) ---
@@ -1429,23 +1681,34 @@ void loop() {
     }
   }
 
-  // --- AUTO-RESUME KONVEYOR SETELAH TEST SENSOR ---
-  if (autoResumeMotorAt > 0 && now >= autoResumeMotorAt) {
-    autoResumeMotorAt = 0;
-    if (!gasAlert && !waterAlert && !flameAlert) {
-      startConveyor();
-      Serial.println("[TEST] Konveyor dilanjutkan otomatis setelah test selesai.");
-    }
-  }
+  // --- AUTO-RESUME KONVEYOR DIHAPUS ---
+  // Sistem harus di-resume secara manual melalui UI Dashboard
 
   if (lcdClearPending && (now - lcdClearTimer >= LCD_CLEAR_DELAY)) {
     lcdClearPending = false;
     updateLCD();
   }
 
+  if (conveyorMode == 1 && lessEnergyStopAt > 0 && now >= lessEnergyStopAt) {
+    if (motorState != "stop") {
+      stopMotor();
+      Serial.println("[MOTOR] Mode Less Energy: Waktu 5 detik habis, motor stop.");
+    }
+    lessEnergyStopAt = 0;
+  }
+
   if (now - lastWsBroadcast >= WS_BROADCAST_MS) {
     lastWsBroadcast = now;
     broadcastStatus();
+  }
+  
+  if (now - lastDebugPrint >= 1000) {
+    lastDebugPrint = now;
+    Serial.printf("=== [DEBUG SENSOR] ===\n");
+    Serial.printf("  GAS   (AOUT:35) : %d  | D0: %d\n", lastGasVal, lastGasD0);
+    Serial.printf("  AIR   (AOUT:36) : %d\n", lastWaterVal);
+    Serial.printf("  API   (AOUT:34) : %d  | D0: %d\n", lastFlameADC, lastFlameD0);
+    Serial.printf("======================\n");
   }
 }
 
@@ -1512,6 +1775,8 @@ void stopMotor() {
   digitalWrite(PIN_MOTOR_IN2, LOW);
   ledcWrite(PIN_MOTOR_ENA, 0);
   motorState = "stop";
+  motorKickUntil = 0;     // Hapus sisa timer kick (jika ada)
+  motorReKickUntil = 0;   // Hapus sisa timer re-kick (jika ada)
   Serial.println("[MOTOR] Stop");
   updateLCD();
 }
@@ -1560,10 +1825,62 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
       if (!servo3.attached()) servo3.attach(PIN_SERVO3, 500, 2400);
       servoAngle3 = angle;
       servo3.write(angle);
-      Serial.printf("[WS] Servo3 → %d°\n", angle);
+      delay(10);
+      Serial.printf("[WS] Servo3 → %d° (attached=%d)\n", angle, servo3.attached());
     }
 
     updateLCD();
+    broadcastStatus();
+    return;
+  }
+
+  if (strcmp(cmd, "set_mode") == 0) {
+    conveyorMode = doc["mode"] | 0;
+    // Setiap ganti mode, reset systemStarted — wajib tekan START lagi
+    systemStarted = false;
+    stopMotor();
+    lessEnergyStopAt = 0;
+    Serial.printf("[WS] Mode diubah menjadi: %d. Sistem di-reset, tunggu START.\n", conveyorMode);
+    broadcastStatus();
+    return;
+  }
+
+  if (strcmp(cmd, "start_system") == 0) {
+    if (!safetyLockout && !gasAlert && !waterAlert && !flameAlert) {
+      systemStarted = true;
+      Serial.println("[WS] Sistem di-START dari web.");
+      if (conveyorMode == 0) {
+        // Keep Going: langsung jalankan konveyor
+        startConveyor();
+        Serial.println("[MOTOR] Keep Going: Konveyor mulai berjalan.");
+      } else {
+        // Less Energy: motor stand-by, akan nyala saat ada objek
+        Serial.println("[MOTOR] Less Energy: Stand-by. Motor akan nyala saat ada objek.");
+      }
+    } else {
+      Serial.println("[WS] START ditolak: ada alert bahaya aktif atau safety lockout!");
+    }
+    broadcastStatus();
+    return;
+  }
+
+  if (strcmp(cmd, "resume") == 0) {
+    // Paksa reset semua alert & lockout
+    safetyLockout = false;
+    gasAlert      = false;
+    waterAlert    = false;
+    flameAlert    = false;
+    systemStarted = true; // Langsung mulai sistem kembali (tidak perlu tekan START lagi)
+    
+    Serial.println("[WS] Safety Lockout direset. Sistem langsung dilanjutkan.");
+    
+    if (conveyorMode == 0) {
+      startConveyor();
+      Serial.println("[MOTOR] Keep Going: Konveyor mulai berjalan (Resume).");
+    } else {
+      Serial.println("[MOTOR] Less Energy: Stand-by (Resume).");
+    }
+    
     broadcastStatus();
     return;
   }
@@ -1590,23 +1907,20 @@ void webSocketEvent(uint8_t num, WStype_t type, uint8_t *payload, size_t length)
     if (strcmp(target, "buzzer") == 0) {
       // Test buzzer: hanya beep, konveyor tidak berhenti
       testBuzzerUntil = millis() + 1000;
-      tone(PIN_BUZZER, 2000);
+      ledcWrite(PIN_BUZZER, 128);
     } else if (strcmp(target, "gas") == 0) {
-      // Test gas: hentikan konveyor + beep, lanjutkan 5.5 detik kemudian
+      // Test gas: hentikan konveyor + beep
       stopMotor();
-      tone(PIN_BUZZER, 2000);
+      ledcWrite(PIN_BUZZER, 128); // 50% duty cycle
       testGasUntil      = millis() + 4000;
-      autoResumeMotorAt = millis() + 5500;
     } else if (strcmp(target, "water") == 0) {
       stopMotor();
-      tone(PIN_BUZZER, 2000);
+      ledcWrite(PIN_BUZZER, 128);
       testWaterUntil    = millis() + 4000;
-      autoResumeMotorAt = millis() + 5500;
     } else if (strcmp(target, "flame") == 0) {
       stopMotor();
-      tone(PIN_BUZZER, 2000);
+      ledcWrite(PIN_BUZZER, 128);
       testFlameUntil    = millis() + 4000;
-      autoResumeMotorAt = millis() + 5500;
     } else if (strcmp(target, "motor") == 0) {
       // Test motor: urutan maju 2s → stop 1s → mundur 2s → stop
       setMotor("fwd", motorSpeed);
@@ -1641,6 +1955,9 @@ String buildStatusJson() {
   doc["motorState"] = motorState;
   doc["motorSpeed"] = motorSpeed;
   doc["btnPressed"] = btnPressed;
+  doc["mode"]          = conveyorMode;
+  doc["safetyLockout"] = safetyLockout;
+  doc["systemStarted"] = systemStarted;
   String out;
   serializeJson(doc, out);
   return out;
@@ -1670,13 +1987,7 @@ void handleGasSensor(uint32_t now) {
     if (elapsed < MQ2_WARMUP_MS) return;
 
     mq2WarmupDone = true;
-    long sum = 0;
-    for (int i = 0; i < 20; i++) sum += analogRead(PIN_GAS_AOUT);
-    mq2Baseline  = (int)(sum / 20);
-    mq2ThreshOn  = mq2Baseline + MQ2_THRESHOLD_DELTA;
-    mq2ThreshOff = mq2Baseline + MQ2_THRESHOLD_DELTA - MQ2_THRESHOLD_HYST;
-    Serial.printf("[MQ-2] Baseline=%d ThreshON=%d ThreshOFF=%d\n",
-                  mq2Baseline, mq2ThreshOn, mq2ThreshOff);
+    Serial.println("[MQ-2] Warm-up selesai.");
     updateLCD();
     return;
   }
@@ -1684,24 +1995,49 @@ void handleGasSensor(uint32_t now) {
   if (now - mq2LastRead < MQ2_READ_INTERVAL) return;
   mq2LastRead = now;
 
+  // Abaikan sensor gas sepenuhnya jika Air atau Api sedang mendeteksi bahaya.
+  // Ini mencegah 100% false-positive akibat ADC cross-talk atau voltage sag ekstrem!
+  if (waterAlert || flameAlert) return;
+
   if (testGasUntil > 0 && now < testGasUntil) {
-    lastGasVal = 4095; // Simulasi deteksi gas maksimal
+    lastGasVal = 4095;
+    lastGasD0  = true;
+    gasDoutLowSince = 0; // skip debounce saat test
   } else {
+    analogRead(PIN_GAS_AOUT); // Dummy read (mengatasi ADC cross-talk)
+    delay(2);                 // Beri waktu kapasitor internal ADC untuk stabil
     lastGasVal = analogRead(PIN_GAS_AOUT);
+    bool rawD0 = (digitalRead(PIN_GAS_DOUT) == LOW);
+
+    if (rawD0 && !lastGasD0) {
+      // DOUT baru saja turun ke LOW — catat waktunya
+      gasDoutLowSince = now;
+    } else if (!rawD0) {
+      // DOUT sudah HIGH lagi — reset timer
+      gasDoutLowSince = 0;
+    }
+    // lastGasD0 hanya true jika sudah LOW terus-menerus >= 2000ms
+    lastGasD0 = rawD0 && (gasDoutLowSince > 0) && (now - gasDoutLowSince >= 2000);
+    Serial.printf("[GAS] rawD0=%d gasDoutLowSince=%lu durasi=%lums D0_valid=%d\n",
+      rawD0, gasDoutLowSince, gasDoutLowSince ? (now - gasDoutLowSince) : 0, lastGasD0);
   }
 
-  if (!gasAlert && lastGasVal > mq2ThreshOn) {
+  bool isDanger = lastGasD0 || (lastGasVal >= MQ2_THRESHOLD_ON);
+  bool isSafe   = (!lastGasD0) && (lastGasVal <= MQ2_THRESHOLD_OFF);
+
+  if (!gasAlert && isDanger) {
     gasAlert = true;
+    safetyLockout = true;
     stopMotor();
-    tone(PIN_BUZZER, 2000);
+    ledcWrite(PIN_BUZZER, 128); // 50% duty cycle
     setRGBBlink(COL_GAS_A, COL_GAS_B);
     lcd.clear(); lcd.setCursor(0, 0); lcd.print("!! BAHAYA ASAP!!");
     lcd.setCursor(0, 1); lcd.print("ADC:"); lcd.print(lastGasVal);
-  } else if (gasAlert && lastGasVal < mq2ThreshOff) {
+  } else if (gasAlert && isSafe) {
     gasAlert = false;
     if (!waterAlert && !flameAlert) {
       stopBuzzer(); setRGBOff();
-      startConveyor();  // Konveyor kembali jalan (kick-start 80%->60%)
+      // startConveyor(); dihapus krn manual resume
       lcd.clear(); lcd.setCursor(0, 0); lcd.print("Udara bersih.");
       lcdClearPending = true; lcdClearTimer = now;
     }
@@ -1719,13 +2055,16 @@ void handleWaterSensor(uint32_t now) {
   if (testWaterUntil > 0 && now < testWaterUntil) {
     lastWaterVal = 4095; // Simulasi air penuh
   } else {
+    analogRead(PIN_WATER_AOUT); // Dummy read
+    delay(2);
     lastWaterVal = analogRead(PIN_WATER_AOUT);
   }
 
   if (!waterAlert && lastWaterVal > WATER_THRESHOLD_ON) {
     waterAlert = true;
+    safetyLockout = true;
     stopMotor();
-    tone(PIN_BUZZER, 2000);
+    ledcWrite(PIN_BUZZER, 128);
     setRGBBlink(COL_WATER_A, COL_WATER_B);
     lcd.clear(); lcd.setCursor(0, 0); lcd.print("!! BANJIR/AIR !!");
     lcd.setCursor(0, 1); lcd.print("ADC:"); lcd.print(lastWaterVal);
@@ -1733,7 +2072,7 @@ void handleWaterSensor(uint32_t now) {
     waterAlert = false;
     if (!gasAlert && !flameAlert) {
       stopBuzzer(); setRGBOff();
-      startConveyor();  // Konveyor kembali jalan (kick-start 80%->60%)
+      // startConveyor(); dihapus krn manual resume
       lcd.clear(); lcd.setCursor(0, 0); lcd.print("Air aman.");
       lcdClearPending = true; lcdClearTimer = now;
     }
@@ -1753,21 +2092,24 @@ void handleFlameSensor(uint32_t now) {
     lastFlameADC = 4095;
   } else {
     lastFlameD0  = (digitalRead(PIN_FLAME_DOUT) == HIGH);
+    analogRead(PIN_FLAME_AOUT); // Dummy read
+    delay(2);
     lastFlameADC = analogRead(PIN_FLAME_AOUT);
   }
 
-  if (!flameAlert && lastFlameD0) {
+  if (!flameAlert && (lastFlameD0 || lastFlameADC <= 3000)) {
     flameAlert = true;
+    safetyLockout = true;
     stopMotor();
-    tone(PIN_BUZZER, 2000);
+    ledcWrite(PIN_BUZZER, 128);
     setRGBBlink(COL_FLAME_A, COL_FLAME_B);
     lcd.clear(); lcd.setCursor(0, 0); lcd.print("!! BAHAYA API !!");
     lcd.setCursor(0, 1); lcd.print("ADC:"); lcd.print(lastFlameADC);
-  } else if (flameAlert && !lastFlameD0) {
+  } else if (flameAlert && (!lastFlameD0 && lastFlameADC > 3000)) {
     flameAlert = false;
     if (!gasAlert && !waterAlert) {
       stopBuzzer(); setRGBOff();
-      startConveyor();  // Konveyor kembali jalan (kick-start 80%->60%)
+      // startConveyor(); dihapus krn manual resume
       lcd.clear(); lcd.setCursor(0, 0); lcd.print("Api padam.");
       lcdClearPending = true; lcdClearTimer = now;
     }
@@ -1778,8 +2120,7 @@ void handleFlameSensor(uint32_t now) {
 //  BUZZER
 // ─────────────────────────────────────────────────────────────
 void stopBuzzer() {
-  noTone(PIN_BUZZER);
-  digitalWrite(PIN_BUZZER, LOW);
+  ledcWrite(PIN_BUZZER, 0);
 }
 
 // ─────────────────────────────────────────────────────────────
