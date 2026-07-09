@@ -52,14 +52,15 @@ Sistem juga dilengkapi dengan serangkaian sensor keselamatan dan peringatan dini
 - **Motor DC + L298N Driver**: Penggerak utama sabuk *conveyor*.
 - **3x Motor Servo**: Membuka gerbang pemilah ke jalur penampungan yang sesuai dengan kategori limbah.
 - **Logika *Hold-and-Release***: Servo akan terbuka dengan jeda waktu yang telah disesuaikan (berdasarkan jarak titik jatuh), kemudian tertutup otomatis.
+- **Safety Lock Servo**: Servo sepenuhnya diblokir bergerak saat *Safety Lockout* aktif — tidak ada pembuangan limbah selama kondisi bahaya terdeteksi.
 - **Kendali Motor**: Mendukung pengaturan kecepatan PWM (0–255) langsung dari Web Dashboard.
 
 ### 🚨 Sensor Keselamatan & Peringatan Dini
 | Sensor | Pin ESP32 | Fungsi |
 |---|---|---|
-| **MQ-2** | `GPIO 26` (Analog) | Deteksi kebocoran gas beracun atau asap |
+| **MQ-2** | `GPIO 35` (ADC1) | Deteksi kebocoran gas beracun atau asap |
 | **Flame Sensor** | `GPIO 34` (Analog), `GPIO 13` (Digital) | Deteksi titik api |
-| **Water Level** | `GPIO 14` (Analog) | Deteksi luapan cairan atau banjir |
+| **Water Level** | `GPIO 36` (ADC1) | Deteksi luapan cairan atau banjir |
 
 **Sistem *Fail-Safe*:**
 - Motor *conveyor* **berhenti seketika** saat terdeteksi bahaya.
@@ -68,7 +69,7 @@ Sistem juga dilengkapi dengan serangkaian sensor keselamatan dan peringatan dini
 - Layar **LCD I2C 16x2** menampilkan teks notifikasi secara *real-time*.
 
 ### 🌐 Web Dashboard Control Panel
-Antarmuka web yang modern, responsif, dan kaya fitur. Dapat diakses langsung via browser tanpa perlu instalasi aplikasi tambahan.
+Antarmuka web yang modern, responsif, dan kaya fitur. Dapat diakses langsung via browser **tanpa perlu instalasi** aplikasi tambahan dan berjalan **100% offline** (tidak butuh koneksi internet).
 
 - **Mode Pengguna (Guest)**: Tampilan *Live View* untuk memonitor status sistem dan sensor.
 - **Mode Admin (`Admin` / `Admin123`)**:
@@ -76,6 +77,18 @@ Antarmuka web yang modern, responsif, dan kaya fitur. Dapat diakses langsung via
   - Kontrol manual tiap Servo (0°–180°).
   - Monitoring metrik ADC dari tiap sensor secara presisi.
   - **Hardware Diagnostics (Test Mode)**: Memungkinkan pengujian setiap komponen *hardware* langsung melalui antarmuka web.
+
+### 📊 Statistik & Analisis (Baru!)
+Sistem kini dilengkapi panel analitik lengkap yang dapat diakses melalui tombol **☰** di pojok kanan atas dashboard:
+
+- **Popup Notifikasi Sortir**: Setiap kali limbah berhasil disortir, notifikasi hijau muncul otomatis dari bagian atas layar.
+- **Grafik Pie Limbah (SVG Offline)**: Proporsi tiap kategori limbah yang telah tersortir, 100% berjalan tanpa internet.
+- **Daftar Limbah per Kategori**: Rincian jumlah tiap jenis limbah dikelompokkan (Infeksius / Non-Infeksius / B3) dengan total per kategori.
+- **Grafik Garis Sensor (SVG Offline)**: Frekuensi kejadian alarm dari tiap sensor (Gas, Air, Api).
+- **Penyimpanan Persisten**: Semua data tersimpan di `localStorage` browser — tidak hilang walaupun halaman di-*refresh*.
+- **Cooldown 5 Detik**: Setiap kejadian bahaya hanya dihitung satu kali, mencegah *double-count* akibat jitter WebSocket.
+- **Tombol Reset Terpisah**: Reset data limbah dan data sensor secara independen.
+- **Sinkronisasi Penuh**: Data yang sama juga tersedia di `Web/admin_dashboard.html` (versi standalone untuk PC).
 
 ---
 
@@ -85,21 +98,23 @@ Antarmuka web yang modern, responsif, dan kaya fitur. Dapat diakses langsung via
 |---|:---:|---|
 | **LCD I2C SDA** | `21` | Komunikasi I2C |
 | **LCD I2C SCL** | `22` | Komunikasi I2C |
-| **Passive Buzzer** | `32` | `tone()` / `noTone()` |
+| **Passive Buzzer** | `32` | PWM Channel 8 (2kHz) |
 | **Push Button** | `5` | `INPUT_PULLUP` |
 | **Servo 1 (Infeksius)** | `33` | 50Hz PWM |
 | **Servo 2 (Non-Inf.)** | `19` | 50Hz PWM |
 | **Servo 3 (B3)** | `18` | 50Hz PWM |
-| **MQ-2 (Gas) AOUT** | `26` | Analog |
-| **Water Level AOUT** | `14` | Analog (ADC1_CH6) |
+| **MQ-2 (Gas) AOUT** | `35` | ADC1 — aman saat WiFi aktif |
+| **Water Level AOUT** | `36` | ADC1 — aman saat WiFi aktif |
 | **Flame AOUT** | `34` | Analog |
 | **Flame DOUT** | `13` | Digital |
-| **RGB LED - Red** | `15` | PWM (`ledcAttach`) |
-| **RGB LED - Green** | `2` | PWM (`ledcAttach`) |
-| **RGB LED - Blue** | `23` | PWM (`ledcAttach`) |
+| **RGB LED - Red** | `15` | PWM Channel 5 |
+| **RGB LED - Green** | `2` | PWM Channel 6 |
+| **RGB LED - Blue** | `23` | PWM Channel 7 |
 | **L298N IN1** | `4` | Arah motor |
 | **L298N IN2** | `17` | Arah motor |
-| **L298N ENA** | `16` | PWM kecepatan |
+| **L298N ENA** | `16` | PWM Channel 4 (100Hz) |
+
+> ⚠️ **Catatan:** Pin ADC2 (GPIO 0, 2, 4, 12–15, 25–27) **tidak dapat digunakan** untuk pembacaan analog saat WiFi aktif pada ESP32. Seluruh sensor analog telah dipindahkan ke **ADC1**.
 
 ---
 
@@ -121,6 +136,8 @@ Antarmuka web yang modern, responsif, dan kaya fitur. Dapat diakses langsung via
  ┃    ┗ 📜 Esp32_CAM.ino     ← Firmware modul ESP32-CAM (TCP streaming video & kontrol Flash)
  ┣ 📂 Esp32_Hotspot/
  ┃ ┗ 📜 Esp32_Hotspot.ino    ← Firmware ESP32 sebagai dedicated Access Point (Router Lokal)
+ ┣ 📂 Web/
+ ┃ ┗ 📜 admin_dashboard.html ← Versi standalone dashboard (bisa dibuka langsung via browser PC)
  ┣ 📂 Backup/
  ┃ ┣ 📜 Esp32_BACKUP.ino     ← Firmware cadangan ESP32 Utama
  ┃ ┗ 📜 Esp32CAM_BACKUP.ino  ← Firmware cadangan ESP32-CAM
@@ -155,23 +172,22 @@ pip install ultralytics opencv-python websocket-client numpy
 ### Langkah 1: Persiapan ESP32 & ESP32-CAM
 1. Tambahkan konfigurasi board ESP32 di **Arduino IDE** (`https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json`).
 2. Install daftar library yang telah disebutkan di atas via **Library Manager**.
-3. Buka `Esp32/Esp32.ino` dan atur SSID serta kata sandi WiFi Anda:
+3. Buka `Esp32/Esp32.ino` dan atur SSID serta kata sandi WiFi:
    ```cpp
    #define WIFI_SSID   "NamaWiFiAnda"
    #define WIFI_PASS   "PasswordWiFiAnda"
    ```
 4. *Upload* program ke ESP32. Buka Serial Monitor (baud rate 115200) dan catat **IP Address** yang didapatkan.
-5. Lakukan hal yang sama untuk mem-flash `Esp32CAM_BACKUP.ino` ke module ESP32-CAM Anda.
+5. Lakukan hal yang sama untuk mem-flash `Esp32_CAM.ino` ke modul ESP32-CAM.
 
 ### Langkah 2: Sesuaikan IP pada Script Python
-Buka file `Python/main_yolo.py` menggunakan teks editor pilihan Anda (mis. VS Code), lalu ubah variabel IP agar sesuai dengan IP Address yang didapatkan sebelumnya:
+Buka `Python/main_yolo.py`, lalu ubah variabel IP sesuai dengan IP yang didapatkan:
 ```python
 CAM_IP       = "192.168.x.x"   # IP Address modul ESP32-CAM
 SMART_IP     = "192.168.x.x"   # IP Address modul ESP32 Utama
 ```
 
 ### Langkah 3: Menjalankan Sistem Utama
-Jalankan script Python melalui terminal:
 ```bash
 cd "Python"
 python main_yolo.py
@@ -181,37 +197,41 @@ python main_yolo.py
 | Tombol | Fungsi |
 |:---:|---|
 | `S` | Menyimpan *screenshot* manual frame saat ini |
-| `A` | Menyalakan/mematikan (*toggle*) fitur Auto-Capture (berguna untuk panen dataset) |
-| `F` | Menyalakan/mematikan lampu Flash (senter) pada modul ESP32-CAM |
+| `A` | Toggle fitur Auto-Capture (untuk panen dataset) |
+| `F` | Toggle lampu Flash pada modul ESP32-CAM |
 | `Q` | Menghentikan program dengan aman (*Quit*) |
 
 ### Langkah 4: Mengakses Web Dashboard
-Buka browser (disarankan Chrome atau Firefox) dan masuk ke: **`http://<IP-ESP32>/`**
+Buka browser dan masuk ke: **`http://<IP-ESP32>/`**
 
-- **Guest Login**: Klik opsi "Masuk sebagai Pengguna" (Tidak butuh password).
-- **Admin Login**: Masuk ke Tab Admin, lalu ketikkan kredensial di bawah ini:
-  - **Username:** `Admin`
-  - **Password:** `Admin123`
+- **Guest Login**: Klik "Masuk sebagai Pengguna" (tidak butuh password).
+- **Admin Login**: Username `Admin`, Password `Admin123`.
+
+### Langkah 5: Panel Statistik & Analisis
+1. Pastikan sistem sudah **di-START** dari dashboard.
+2. Klik tombol **`☰`** di pojok **kanan atas** header.
+3. Panel sidebar akan terbuka dan menampilkan:
+   - **Grafik Pie** proporsi limbah per kategori.
+   - **Daftar Limbah** dikelompokkan per kategori dengan total.
+   - **Grafik Garis Sensor** frekuensi kejadian bahaya.
+   - **Daftar Sensor** Gas / Air / Api beserta jumlah kejadiannya.
+4. Gunakan **"Reset Data Limbah"** atau **"Reset"** untuk menghapus riwayat.
 
 ---
 
 ## 🎓 Cara Melatih Model AI Sendiri
 
-Ingin menambahkan jenis sampah medis baru atau memperbaiki akurasi deteksi? Anda dapat melatih model YOLO Anda sendiri:
-
-1. Kumpulkan sampel gambar menggunakan mode **Auto-Capture** (tekan tombol `A`) yang sudah tersedia pada `main_yolo.py`.
-2. Label dataset gambar yang sudah terkumpul menggunakan script bawaan `label_manual.py` atau gunakan platform seperti [Roboflow](https://roboflow.com/).
-3. Lakukan proses pelatihan (training) menggunakan script berikut:
+1. Kumpulkan gambar menggunakan mode **Auto-Capture** (tekan `A`) di `main_yolo.py`.
+2. Label dataset dengan `label_manual.py` atau platform [Roboflow](https://roboflow.com/).
+3. Jalankan pelatihan:
    ```bash
    python train_yolo.py
    ```
-4. Setelah selesai, model terbaik secara otomatis akan tersimpan di dalam direktori `waste_model/weights/best.pt` dan siap digunakan.
+4. Model terbaik otomatis tersimpan di `waste_model/weights/best.pt`.
 
 ---
 
 ## 📡 Arsitektur Sistem
-
-Berikut adalah alur data dan interaksi antar perangkat dalam keseluruhan sistem:
 
 ```mermaid
 graph TD
@@ -220,48 +240,40 @@ graph TD
     end
 
     subgraph P[Sistem AI & Pengolahan Data]
-        PC[Laptop / PC]
-        YOLO(YOLOv8 AI)
         SCRIPT(main_yolo.py)
+        YOLO(YOLOv8 AI)
     end
 
     subgraph E[Sistem Kontrol & Aktuator]
         ESP[ESP32 Utama]
         SERVO[3x Motor Servo]
         MOTOR[Motor DC Conveyor]
-        SENSORS[Sensor MQ2, Api, Air]
+        SENSORS[Sensor MQ2 / Api / Air]
         ALERTS[Buzzer & RGB LED & LCD]
     end
 
     subgraph W[User Interface]
         WEB[Web Dashboard]
+        STATS[Statistik & Analisis Offline]
     end
 
-    %% Koneksi Kamera ke PC
     CAM -- "TCP Video Stream" --> SCRIPT
-    SCRIPT -- "WebSocket (Flash Control)" --> CAM
-    
-    %% Internal PC
+    SCRIPT -- "WebSocket Flash Control" --> CAM
     SCRIPT <--> YOLO
-    
-    %% PC ke ESP32 Utama
-    SCRIPT -- "HTTP GET /api (Deteksi & Klasifikasi)" --> ESP
-    
-    %% Internal ESP32
+    SCRIPT -- "HTTP GET /api" --> ESP
     ESP --> SERVO
     ESP --> MOTOR
     SENSORS --> ESP
     ESP --> ALERTS
-    
-    %% ESP32 ke Web
     ESP <-->|WebSocket Port 81| WEB
+    WEB --> STATS
 ```
 
 ---
 
 ## 🤝 Kontribusi
 
-Proyek ini dikembangkan khusus untuk kebutuhan inovasi lomba dan kompetisi teknologi **CNC HIMTIKA**. Kami mengundang siapa pun untuk melakukan *fork* pada repositori ini dan menambahkan inovasinya sendiri. Jangan ragu untuk membuat *Pull Request* atau membuka *Issue* jika Anda menemukan *bug*!
+Proyek ini dikembangkan khusus untuk kebutuhan inovasi lomba **CNC HIMTIKA**. Kami mengundang siapa pun untuk melakukan *fork* dan menambahkan inovasinya. Jangan ragu untuk membuat *Pull Request* atau *Issue* jika menemukan *bug*!
 
 ---
 
