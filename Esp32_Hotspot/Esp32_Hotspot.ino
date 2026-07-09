@@ -1,8 +1,8 @@
 #include <WiFi.h>
 
 // Nama WiFi (SSID) dan Password disesuaikan dengan yang ada di ESP32-CAM
-const char *ssid = "Absolute Solver";
-const char *password = "CynIsMyRobo18z";
+const char *ssid = "";
+const char *password = "";
 
 void setup() {
   Serial.begin(115200);
