@@ -52,8 +52,8 @@
 #include <ArduinoJson.h>
 
 // ── WiFi ─────────────────────────────────────────────────────
-#define WIFI_SSID   "Absolute Solver"
-#define WIFI_PASS   "CynIsMyRobo18z"
+#define WIFI_SSID   ""
+#define WIFI_PASS   ""
 
 // ── Pin Definitions ──────────────────────────────────────────
 #define PIN_BUZZER      32
