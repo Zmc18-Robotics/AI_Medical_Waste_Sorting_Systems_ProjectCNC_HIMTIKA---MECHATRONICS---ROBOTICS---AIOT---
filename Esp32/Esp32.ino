@@ -438,9 +438,104 @@ const char DASHBOARD_HTML[] PROGMEM = R"====(
     z-index: 9999; pointer-events: none;
   }
   .toast.show { transform: translateY(0); opacity: 1; }
+
+  /* SORT NOTIFICATION (TOP) */
+  .sort-popup {
+    position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-100%);
+    background: var(--ok); color: #000; font-weight: 600; font-size: 14px;
+    padding: 12px 24px; border-radius: 0 0 12px 12px; z-index: 10000;
+    box-shadow: 0 4px 12px rgba(63,185,80,0.3);
+    transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+  .sort-popup.show { transform: translateX(-50%) translateY(0); }
+
+  /* SIDEBAR (STATISTIK LIMBAH) */
+  .sidebar-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6); z-index: 999; display: none; opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .sidebar-overlay.show { display: block; opacity: 1; }
+  .sidebar {
+    position: fixed; top: 0; right: -500px; bottom: 0; width: 100%; max-width: 500px;
+    background: var(--surface); border-left: 1px solid var(--border);
+    z-index: 1000; transition: right 0.3s cubic-bezier(0.34,1.56,0.64,1);
+    display: flex; flex-direction: column; box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+  }
+  .sidebar.show { right: 0; }
+  .sidebar-header { padding: 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .sidebar-title { font-size: 18px; font-weight: 700; color: var(--text); }
+  .close-btn { background: transparent; border: none; color: var(--muted); font-size: 24px; cursor: pointer; }
+  .sidebar-content { padding: 20px; overflow-y: auto; flex: 1; }
+  .stats-layout { display: flex; gap: 20px; align-items: stretch; }
+  .stats-chart { flex: 1; min-width: 200px; display: flex; align-items: center; justify-content: center; flex-direction: column; }
+  .stats-list { flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .category-group { background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .category-head { background: rgba(0,217,255,0.05); border-bottom: 1px solid var(--border); padding: 8px 12px; font-weight: 600; color: var(--accent); font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .category-item { display: flex; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .category-item:last-child { border-bottom: none; }
+  .category-total { display: flex; justify-content: space-between; padding: 8px 12px; background: rgba(0,0,0,0.2); font-weight: 700; color: #fff; font-size: 13px; }
+  
+  .svg-pie { width: 100%; max-width: 220px; height: auto; transform: rotate(-90deg); border-radius: 50%; }
+  .legend-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 14px; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); }
+  .legend-color { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  
+  /* SENSOR CHART */
+  .sensor-chart { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+  .sensor-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 14px; text-transform: uppercase; letter-spacing: 0.05em; display:flex; justify-content:space-between; align-items:center; }
+  .sensor-layout { display: flex; gap: 20px; align-items: center; }
+  .svg-line { width: 100%; max-width: 250px; height: auto; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px; box-sizing: border-box; overflow:visible; }
+  .sensor-list { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .sensor-item { display: flex; justify-content: space-between; padding: 10px 14px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; align-items:center; }
+  .sensor-dot { width: 10px; height: 10px; border-radius: 50%; display:inline-block; margin-right: 8px; flex-shrink: 0; }
+
+  @media(max-width: 500px){ .stats-layout, .sensor-layout { flex-direction: column; } }
+
+  .hamburger-btn {
+    background: transparent; border: none; color: var(--text); font-size: 20px;
+    cursor: pointer; padding: 5px; margin-left: 10px; transition: color 0.2s;
+  }
+  .hamburger-btn:hover { color: var(--accent); }
 </style>
 </head>
 <body>
+
+<!-- NOTIFICATION POPUPS -->
+<div id="sortPopup" class="sort-popup">Berhasil menyortir limbah "..."</div>
+
+<!-- SIDEBAR MODAL -->
+<div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
+<div id="sidebar" class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-title">📊 Total Limbah Tersortir</div>
+    <button class="close-btn" onclick="closeSidebar()">×</button>
+  </div>
+  <div class="sidebar-content">
+    <div class="stats-layout">
+      <div class="stats-chart">
+        <div id="svgContainer" style="width:100%; display:flex; justify-content:center;"></div>
+        <div id="chartLegend" class="legend-list"></div>
+      </div>
+      <div class="stats-list" id="wasteList">
+        <!-- JS akan render list disini -->
+      </div>
+    </div>
+    <button onclick="resetStats()" style="width:100%; margin-top:20px; background:rgba(248,81,73,0.1); border:1px solid rgba(248,81,73,0.3); color:var(--danger); padding:10px; border-radius:8px; cursor:pointer; font-weight:600; transition:background 0.2s;" onmouseover="this.style.background='rgba(248,81,73,0.2)'" onmouseout="this.style.background='rgba(248,81,73,0.1)'">Reset Data Limbah</button>
+    
+    <!-- SENSOR ANALYTICS -->
+    <div class="sensor-chart">
+      <div class="sensor-title">
+        📉 Analisis Sensor Bahaya
+        <button onclick="resetSensorStats()" style="background:rgba(227,179,65,0.1); border:1px solid rgba(227,179,65,0.3); color:var(--warn); padding:4px 8px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:600; transition:opacity 0.2s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">Reset</button>
+      </div>
+      <div class="sensor-layout">
+        <div id="sensorSvgContainer" style="flex:1; display:flex; justify-content:center;"></div>
+        <div id="sensorList" class="sensor-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ═══════════════════════════════════════ IP CONFIG PAGE ═══════════════════════════════════════ -->
 <div id="ipConfigPage" style="display:none;">
@@ -520,6 +615,7 @@ const char DASHBOARD_HTML[] PROGMEM = R"====(
       <button style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;" onclick="connectWS()">Reconnect</button>
     </div>
     <button class="logout-btn" onclick="doLogout()">← Keluar</button>
+    <button class="hamburger-btn" onclick="openSidebar()">☰</button>
   </div>
 </header>
 
@@ -912,6 +1008,162 @@ function connectWS() {
 function send(obj) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(obj)); }
 
 // ═══════════════════════════════════════
+//  WASTE STATISTICS LOGIC
+// ═══════════════════════════════════════
+let wasteStats = JSON.parse(localStorage.getItem('wasteStats')) || {};
+let sensorStats = JSON.parse(localStorage.getItem('sensorStats')) || { gas: 0, water: 0, flame: 0 };
+let prevAlerts = { gas: false, water: false, flame: false };
+let prevServoActive = 0;
+let sortPopupTimer;
+
+function showSortPopup(msg) {
+  const p = document.getElementById('sortPopup');
+  p.textContent = msg;
+  p.classList.add('show');
+  clearTimeout(sortPopupTimer);
+  sortPopupTimer = setTimeout(() => { p.classList.remove('show'); }, 3000);
+}
+
+function openSidebar() {
+  document.getElementById('sidebarOverlay').classList.add('show');
+  document.getElementById('sidebar').classList.add('show');
+  renderStats();
+}
+function closeSidebar() {
+  document.getElementById('sidebarOverlay').classList.remove('show');
+  document.getElementById('sidebar').classList.remove('show');
+}
+
+function resetStats() {
+  if (confirm("Hapus seluruh data riwayat limbah tersortir?")) {
+    wasteStats = {};
+    localStorage.removeItem('wasteStats');
+    renderStats();
+  }
+}
+
+function resetSensorStats() {
+  if (confirm("Hapus seluruh data riwayat analisis sensor?")) {
+    sensorStats = { gas: 0, water: 0, flame: 0 };
+    localStorage.removeItem('sensorStats');
+    renderStats();
+  }
+}
+
+function renderStats() {
+  const listEl = document.getElementById('wasteList');
+  const svgCont = document.getElementById('svgContainer');
+  const legendCont = document.getElementById('chartLegend');
+  listEl.innerHTML = ''; svgCont.innerHTML = ''; legendCont.innerHTML = '';
+  
+  // Periksa apakah format lama (tanpa kategori) atau kosong
+  const keys = Object.keys(wasteStats);
+  if (keys.length > 0 && typeof wasteStats[keys[0]] === 'number') {
+    wasteStats = {}; // Reset jika format lama
+    localStorage.removeItem('wasteStats');
+  }
+  
+  if (Object.keys(wasteStats).length === 0) {
+    listEl.innerHTML = '<div style="color:var(--muted); text-align:center; padding: 20px;">Belum ada data limbah.</div>';
+    return;
+  }
+
+  const bgColors = ['#00d9ff', '#3fb950', '#ff7043', '#bc8cff', '#ffd700', '#f85149'];
+  let colorIdx = 0;
+  
+  let categoryTotals = [];
+  let grandTotal = 0;
+
+  for (const cat in wasteStats) {
+    let catTotal = 0;
+    let itemsHtml = '';
+    
+    for (const name in wasteStats[cat]) {
+      const count = wasteStats[cat][name];
+      catTotal += count;
+      itemsHtml += `<div class="category-item"><span>${name}</span><span>${count}</span></div>`;
+    }
+    
+    grandTotal += catTotal;
+    const catColor = bgColors[colorIdx % bgColors.length];
+    categoryTotals.push({ label: cat, val: catTotal, color: catColor });
+    
+    const catDiv = document.createElement('div');
+    catDiv.className = 'category-group';
+    catDiv.innerHTML = `
+      <div class="category-head" style="border-left: 4px solid ${catColor}">${cat}</div>
+      ${itemsHtml}
+      <div class="category-total"><span>Total</span><span>${catTotal}</span></div>
+    `;
+    listEl.appendChild(catDiv);
+    colorIdx++;
+  }
+
+  // Render SVG Pie Chart
+  if (grandTotal > 0) {
+    let svgHtml = `<svg viewBox="0 0 32 32" class="svg-pie">`;
+    let legendHtml = '';
+    let cumulativePercent = 0;
+    
+    categoryTotals.forEach(item => {
+      const percent = item.val / grandTotal;
+      const dashArray = `${percent * 100} 100`;
+      const dashOffset = -cumulativePercent * 100;
+      
+      svgHtml += `<circle r="16" cx="16" cy="16" fill="transparent" stroke="${item.color}" stroke-width="32" stroke-dasharray="${dashArray}" stroke-dashoffset="${dashOffset}"></circle>`;
+      
+      legendHtml += `<div class="legend-item"><div class="legend-color" style="background:${item.color}"></div>${item.label}</div>`;
+      
+      cumulativePercent += percent;
+    });
+    
+    svgHtml += `</svg>`;
+    svgCont.innerHTML = svgHtml;
+    legendCont.innerHTML = legendHtml;
+  }
+
+  // ── RENDER SENSOR STATS (LINE CHART) ──
+  const sList = document.getElementById('sensorList');
+  const sSvg = document.getElementById('sensorSvgContainer');
+  sList.innerHTML = ''; sSvg.innerHTML = '';
+
+  const sData = [
+    { key: 'gas', label: 'Gas/Asap', val: sensorStats.gas || 0, color: '#bc8cff' },
+    { key: 'water', label: 'Air Berlebih', val: sensorStats.water || 0, color: '#00d9ff' },
+    { key: 'flame', label: 'Api', val: sensorStats.flame || 0, color: '#f85149' }
+  ];
+
+  let maxVal = Math.max(1, ...sData.map(d => d.val));
+  if (maxVal < 5) maxVal = 5; // Minimum scale for nice looking chart
+
+  sData.forEach(item => {
+    sList.innerHTML += `<div class="sensor-item"><div style="display:flex;align-items:center;"><span class="sensor-dot" style="background:${item.color}"></span>${item.label}</div><strong style="color:${item.color}; font-size:16px;">${item.val}</strong></div>`;
+  });
+
+  let svgW = 200, svgH = 100;
+  let gap = svgW / 2; // 3 points = 2 intervals
+  
+  let pts = sData.map((d, i) => {
+    let x = i * gap;
+    let y = svgH - ((d.val / maxVal) * (svgH - 25)) - 12; // 12px bottom padding, leaving room at top
+    return `${x},${y}`;
+  });
+
+  let polyHtml = `<polyline points="${pts.join(' ')}" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />`;
+  let circlesHtml = sData.map((d, i) => {
+    let x = i * gap;
+    let y = svgH - ((d.val / maxVal) * (svgH - 25)) - 12;
+    return `<circle cx="${x}" cy="${y}" r="4" fill="${d.color}" stroke="var(--surface2)" stroke-width="1.5" />
+            <text x="${x}" y="${y - 10}" fill="${d.color}" font-size="11" text-anchor="middle" font-weight="bold">${d.val}</text>`;
+  }).join('');
+
+  sSvg.innerHTML = `<svg viewBox="-15 0 ${svgW + 30} ${svgH}" class="svg-line">
+    ${polyHtml}
+    ${circlesHtml}
+  </svg>`;
+}
+
+// ═══════════════════════════════════════
 //  UPDATE UI
 // ═══════════════════════════════════════
 function updateUI(d) {
@@ -920,6 +1172,34 @@ function updateUI(d) {
   if (d.gasAlert)   alerts.push('GAS/ASAP');
   if (d.waterAlert) alerts.push('AIR BERLEBIH');
   if (d.flameAlert) alerts.push('API');
+  
+  // Deteksi sensor untuk statistik — pakai cooldown 5 detik agar tidak double-count
+  const now_ms = Date.now();
+  const SENSOR_COOLDOWN = 5000; // ms
+  if (!window._lastSensorCount) window._lastSensorCount = { gas: 0, water: 0, flame: 0 };
+  
+  if (d.gasAlert && !prevAlerts.gas && (now_ms - (window._lastSensorCount.gas||0)) > SENSOR_COOLDOWN) {
+    sensorStats.gas = (sensorStats.gas||0)+1;
+    window._lastSensorCount.gas = now_ms;
+    localStorage.setItem('sensorStats', JSON.stringify(sensorStats));
+    if (document.getElementById('sidebar').classList.contains('show')) renderStats();
+  }
+  if (d.waterAlert && !prevAlerts.water && (now_ms - (window._lastSensorCount.water||0)) > SENSOR_COOLDOWN) {
+    sensorStats.water = (sensorStats.water||0)+1;
+    window._lastSensorCount.water = now_ms;
+    localStorage.setItem('sensorStats', JSON.stringify(sensorStats));
+    if (document.getElementById('sidebar').classList.contains('show')) renderStats();
+  }
+  if (d.flameAlert && !prevAlerts.flame && (now_ms - (window._lastSensorCount.flame||0)) > SENSOR_COOLDOWN) {
+    sensorStats.flame = (sensorStats.flame||0)+1;
+    window._lastSensorCount.flame = now_ms;
+    localStorage.setItem('sensorStats', JSON.stringify(sensorStats));
+    if (document.getElementById('sidebar').classList.contains('show')) renderStats();
+  }
+  prevAlerts.gas   = !!d.gasAlert;
+  prevAlerts.water = !!d.waterAlert;
+  prevAlerts.flame = !!d.flameAlert;
+
   const banner = document.getElementById('alertBanner');
   if (alerts.length) {
     banner.classList.add('active');
@@ -932,6 +1212,29 @@ function updateUI(d) {
   const servoNames = { 1: '▸ Servo 1 — Infeksius (Kantong Kuning)', 2: '▸ Servo 2 — Non-Infeksius (Kantong Hitam)', 3: '▸ Servo 3 — B3 (Kantong Merah)' };
   const servoText  = (d.servoActive && d.servoActive > 0 && wasteName !== 'Tidak Ada')
                      ? (servoNames[d.servoActive] || '▸ Servo ' + d.servoActive) : null;
+
+  // Cek jika servo baru saja terbuka (menandakan limbah berhasil disortir)
+  if (d.servoActive > 0 && prevServoActive === 0 && wasteName !== 'Tidak Ada') {
+    // Cek format lama, jika iya reset
+    const keys = Object.keys(wasteStats);
+    if (keys.length > 0 && typeof wasteStats[keys[0]] === 'number') {
+      wasteStats = {};
+    }
+    
+    const cat = wasteCat !== '—' ? wasteCat : 'Lainnya';
+    if (!wasteStats[cat]) wasteStats[cat] = {};
+    if (!wasteStats[cat][wasteName]) wasteStats[cat][wasteName] = 0;
+    
+    wasteStats[cat][wasteName]++;
+    localStorage.setItem('wasteStats', JSON.stringify(wasteStats));
+    showSortPopup('Berhasil menyortir limbah "' + wasteName + '"');
+    
+    // Update chart jika sidebar sedang terbuka
+    if (document.getElementById('sidebar').classList.contains('show')) {
+      renderStats();
+    }
+  }
+  prevServoActive = d.servoActive || 0;
 
   // User live view
   if (document.getElementById('userView').style.display !== 'none') {
@@ -1536,30 +1839,32 @@ void setup() {
         String c  = server.hasArg("cat")   ? server.arg("cat")   : lastWasteCategory;
 
         if (id >= 1 && id <= 3) {
-          // Hitung delay konveyor hanya saat MEMBUKA servo (angle > 0)
-          uint32_t delayMs = 0;
-          if (angle > 0) {
-            if      (id == 1) delayMs = SERVO_DELAY_1;  // Infeksius     = 2.0 s
-            else if (id == 2) delayMs = SERVO_DELAY_2;  // Non-Infeksius = 2.3 s
-            else if (id == 3) delayMs = SERVO_DELAY_3;  // B3            = 2.6 s
-          }
+          if (angle > 0 && (safetyLockout || !systemStarted)) {
+            Serial.printf("[HTTP] Servo %d -> %d deg DIABAIKAN (Lockout/Belum Start)\n", id, angle);
+          } else {
+            // Hitung delay konveyor hanya saat MEMBUKA servo (angle > 0)
+            uint32_t delayMs = 0;
+            if (angle > 0) {
+              if      (id == 1) delayMs = SERVO_DELAY_1;  // Infeksius     = 2.0 s
+              else if (id == 2) delayMs = SERVO_DELAY_2;  // Non-Infeksius = 2.3 s
+              else if (id == 3) delayMs = SERVO_DELAY_3;  // B3            = 2.6 s
+            }
 
-          servoJobs[id].pending = true;
-          servoJobs[id].openAt  = millis() + delayMs;
-          servoJobs[id].angle   = angle;
-          servoJobs[id].waste   = w;
-          servoJobs[id].cat     = c;
+            servoJobs[id].pending = true;
+            servoJobs[id].openAt  = millis() + delayMs;
+            servoJobs[id].angle   = angle;
+            servoJobs[id].waste   = w;
+            servoJobs[id].cat     = c;
 
-          Serial.printf("[HTTP] Servo %d -> %d deg dijadwalkan dalam %dms (Objek: %s)\n",
-                        id, angle, delayMs, w.c_str());
+            Serial.printf("[HTTP] Servo %d -> %d deg dijadwalkan dalam %dms (Objek: %s)\n",
+                          id, angle, delayMs, w.c_str());
 
-          // Mode Less Energy: motor hanya nyala jika sistem sudah di-START dari web
-          if (angle > 0 && conveyorMode == 1 && systemStarted && !safetyLockout && !gasAlert && !waterAlert && !flameAlert) {
-            startConveyor();
-            lessEnergyStopAt = millis() + 5000;
-            Serial.println("[HTTP] Less Energy: Motor ON untuk 5 detik (ada objek)");
-          } else if (angle > 0 && conveyorMode == 1 && !systemStarted) {
-            Serial.println("[HTTP] Less Energy: Sistem belum di-START, motor diabaikan.");
+            // Mode Less Energy: motor hanya nyala jika sistem sudah di-START dari web
+            if (angle > 0 && conveyorMode == 1 && systemStarted && !safetyLockout && !gasAlert && !waterAlert && !flameAlert) {
+              startConveyor();
+              lessEnergyStopAt = millis() + 5000;
+              Serial.println("[HTTP] Less Energy: Motor ON untuk 5 detik (ada objek)");
+            }
           }
         }
         server.send(200, "text/plain", "OK");
