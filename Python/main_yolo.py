@@ -27,11 +27,11 @@ from collections import deque
 from datetime import datetime
 
 # ─── Konfigurasi IP ──────────────────────────────────────────────────────────
-CAM_IP       = "192.168.4.4"
+CAM_IP       = "192.168.4.2"
 CAM_TCP_PORT = 80
 CAM_WS_PORT  = 81
 
-SMART_IP      = "192.168.4.2"
+SMART_IP      = "192.168.4.3"
 SMART_WS_PORT = 81
 
 # ─── Path ─────────────────────────────────────────────────────────────────────
