@@ -8,8 +8,8 @@
 #include <ArduinoJson.h>        // Library: ArduinoJson by Benoit Blanchon
 
 // ─── KONFIGURASI WIFI ───────────────────────────────────
-#define WIFI_SSID   "Absolute Solver"
-#define WIFI_PASS   "CynIsMyRobo18z"
+#define WIFI_SSID   ""
+#define WIFI_PASS   ""
 
 // ─── PIN KAMERA (AI-THINKER) ────────────────────────────
 #define PWDN_GPIO_NUM     32
@@ -149,6 +149,10 @@ void loop() {
       esp_camera_fb_return(fb);
 
       if (!ok) break;
+
+      // Tambahkan sedikit delay (30ms) untuk memberi nafas pada WiFi 
+      // dan mencegah ESP32-CAM overheat / nge-lag
+      delay(30);
     }
 
     Serial.println("[TCP] Client putus");
